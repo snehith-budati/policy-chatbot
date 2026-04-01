@@ -1,0 +1,12 @@
+Flask==3.0.2
+Flask-Cors==4.0.0
+numpy==1.26.4
+PyPDF2==3.0.1
+Werkzeug==3.0.1
+requests==2.31.0
+pdf2image==1.17.0
+pytesseract==0.3.10
+Pillow>=10.2.0
+sentence-transformers>=2.7.0
+Flask-Limiter>=3.5.0
+huggingface-hub

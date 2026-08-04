@@ -1,8 +1,9 @@
 import os
-import sqlite3
+import psycopg2
+from psycopg2.extras import RealDictCursor
 from datetime import datetime, timedelta, timezone
 from flask import g
-from config import DATABASE
+from config import DATABASE_URL, DB_HOST, DB_NAME, DB_USER, DB_PASSWORD, DB_PORT
 
 # Add IST Timezone configuration
 IST = timezone(timedelta(hours=5, minutes=30))
@@ -14,238 +15,280 @@ def get_ist_now():
 def ensure_ist(dt):
     """Ensures a datetime is aware and in IST"""
     if dt is None: return None
+    if isinstance(dt, str):
+        try:
+            dt = datetime.fromisoformat(dt)
+        except Exception:
+            return None
     if dt.tzinfo is None:
         return dt.replace(tzinfo=IST)
     return dt.astimezone(IST)
 
+class PgConnectionWrapper:
+    """Wrapper around psycopg2 connection to mimic sqlite3 db.execute(...) interface"""
+    def __init__(self, conn):
+        self._conn = conn
+
+    def cursor(self):
+        return self._conn.cursor(cursor_factory=RealDictCursor)
+
+    def execute(self, query, vars=None):
+        cur = self.cursor()
+        cur.execute(query, vars)
+        return cur
+
+    def commit(self):
+        return self._conn.commit()
+
+    def rollback(self):
+        return self._conn.rollback()
+
+    def close(self):
+        return self._conn.close()
+
+    @property
+    def closed(self):
+        return self._conn.closed
+
 def get_db():
     """Get database connection bound to current Flask context"""
     db = getattr(g, '_database', None)
-    if db is None:
-        db = g._database = sqlite3.connect(DATABASE)
-        db.row_factory = sqlite3.Row
+    if db is None or db.closed != 0:
+        raw_conn = psycopg2.connect(DATABASE_URL)
+        db = g._database = PgConnectionWrapper(raw_conn)
     return db
 
 def close_connection(exception=None):
     """Close database connection at end of request context"""
     db = getattr(g, '_database', None)
-    if db is not None:
+    if db is not None and db.closed == 0:
         db.close()
 
 def log_admin_action(admin, action, details):
     """Log administrative actions to the database"""
     try:
-        db = sqlite3.connect(DATABASE)
-        db.execute(
-            "INSERT INTO admin_logs (admin, action, details, timestamp) VALUES (?, ?, ?, ?)",
+        raw_conn = psycopg2.connect(DATABASE_URL)
+        cur = raw_conn.cursor(cursor_factory=RealDictCursor)
+        cur.execute(
+            "INSERT INTO admin_logs (admin, action, details, timestamp) VALUES (%s, %s, %s, %s)",
             (admin, action, details, get_ist_now().isoformat())
         )
-        db.commit()
-        db.close()
+        raw_conn.commit()
+        cur.close()
+        raw_conn.close()
         print(f"📊 [LOG]: {admin} | {action} | {details}")
     except Exception as e:
         print(f"⚠️ Error logging admin action: {e}")
+
+def get_table_columns(table_name):
+    """Helper to fetch column names for a table in PostgreSQL"""
+    db = get_db()
+    cur = db.execute(
+        "SELECT column_name FROM information_schema.columns WHERE table_name = %s",
+        (table_name,)
+    )
+    return [row['column_name'] for row in cur.fetchall()]
 
 def migrate_database():
     """Add new columns to existing tables if they don't exist"""
     db = get_db()
     cursor = db.cursor()
     
-    # Check if policy_type column exists in policies table
-    cursor.execute("PRAGMA table_info(policies)")
-    columns = [column[1] for column in cursor.fetchall()]
-    
+    columns = get_table_columns('policies')
     if 'policy_type' not in columns:
         try:
-            cursor.execute("ALTER TABLE policies ADD COLUMN policy_type TEXT DEFAULT 'General'")
+            cursor.execute("ALTER TABLE policies ADD COLUMN policy_type VARCHAR(100) DEFAULT 'General'")
             print("✅ Added policy_type column to policies table")
         except Exception as e:
-            print(f"Note: policy_type column may already exist: {e}")
+            print(f"Note: policy_type column error: {e}")
+            db.rollback()
     
     if 'extracted_sections' not in columns:
         try:
             cursor.execute("ALTER TABLE policies ADD COLUMN extracted_sections TEXT")
             print("✅ Added extracted_sections column to policies table")
         except Exception as e:
-            print(f"Note: extracted_sections column may already exist: {e}")
+            print(f"Note: extracted_sections column error: {e}")
+            db.rollback()
     
-    # Check if is_header column exists in embeddings table
-    cursor.execute("PRAGMA table_info(embeddings)")
-    emb_columns = [column[1] for column in cursor.fetchall()]
-    
+    emb_columns = get_table_columns('embeddings')
     if 'is_header' not in emb_columns:
         try:
-            cursor.execute("ALTER TABLE embeddings ADD COLUMN is_header BOOLEAN DEFAULT 0")
+            cursor.execute("ALTER TABLE embeddings ADD COLUMN is_header BOOLEAN DEFAULT FALSE")
             print("✅ Added is_header column to embeddings table")
         except Exception as e:
-            print(f"Note: is_header column may already exist: {e}")
+            print(f"Note: is_header column error: {e}")
+            db.rollback()
 
-    # Check if satisfaction column exists in chat_history
-    cursor.execute("PRAGMA table_info(chat_history)")
-    chat_cols = [column[1] for column in cursor.fetchall()]
+    chat_cols = get_table_columns('chat_history')
     if 'satisfaction' not in chat_cols:
         try:
             cursor.execute("ALTER TABLE chat_history ADD COLUMN satisfaction BOOLEAN")
             print("✅ Added satisfaction column to chat_history table")
-        except: pass
+        except Exception: db.rollback()
             
     if 'duration' not in chat_cols:
         try:
             cursor.execute("ALTER TABLE chat_history ADD COLUMN duration FLOAT")
             print("✅ Added duration column to chat_history table")
-        except: pass
+        except Exception: db.rollback()
         
     if 'confidence' not in chat_cols:
         try:
             cursor.execute("ALTER TABLE chat_history ADD COLUMN confidence FLOAT")
             print("✅ Added confidence column to chat_history table")
-        except: pass
+        except Exception: db.rollback()
 
     if 'model_used' not in chat_cols:
         try:
-            cursor.execute("ALTER TABLE chat_history ADD COLUMN model_used TEXT DEFAULT 'phi3:mini'")
+            cursor.execute("ALTER TABLE chat_history ADD COLUMN model_used VARCHAR(100) DEFAULT 'phi3:mini'")
             print("✅ Added model_used column to chat_history table")
-        except: pass
+        except Exception: db.rollback()
 
-    # Add columns to users table individually
-    cursor.execute("PRAGMA table_info(users)")
-    user_cols = [column[1] for column in cursor.fetchall()]
-    
+    user_cols = get_table_columns('users')
     if 'otp' not in user_cols:
         try:
-            cursor.execute("ALTER TABLE users ADD COLUMN otp TEXT")
+            cursor.execute("ALTER TABLE users ADD COLUMN otp VARCHAR(10)")
             print("✅ Added otp column to users table")
-        except: pass
+        except Exception: db.rollback()
         
     if 'otp_expiry' not in user_cols:
         try:
-            cursor.execute("ALTER TABLE users ADD COLUMN otp_expiry TEXT")
+            cursor.execute("ALTER TABLE users ADD COLUMN otp_expiry TIMESTAMP")
             print("✅ Added otp_expiry column to users table")
-        except: pass
+        except Exception: db.rollback()
         
     if 'verified' not in user_cols:
         try:
             cursor.execute("ALTER TABLE users ADD COLUMN verified INTEGER DEFAULT 0")
             print("✅ Added verified column to users table")
-        except: pass
+        except Exception: db.rollback()
 
     if 'last_login' not in user_cols:
         try:
-            cursor.execute("ALTER TABLE users ADD COLUMN last_login TEXT")
+            cursor.execute("ALTER TABLE users ADD COLUMN last_login TIMESTAMP")
             print("✅ Added last_login column to users table")
-        except: pass
+        except Exception: db.rollback()
 
-    # Create feedback_ratings table
+    # Create feedback_ratings table if missing
     try:
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS feedback_ratings (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_email TEXT,
+                id SERIAL PRIMARY KEY,
+                user_email VARCHAR(255),
                 stars INTEGER,
                 review TEXT,
-                timestamp TIMESTAMP DEFAULT (datetime('now', '+5 hours', '30 minutes'))
+                timestamp TIMESTAMP DEFAULT (NOW() + INTERVAL '5 hours 30 minutes')
             )
         ''')
-    except: pass
+    except Exception: db.rollback()
         
     db.commit()
 
-    # Create semantic_cache table
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS semantic_cache (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            question TEXT UNIQUE,
-            embedding BLOB,
-            answer TEXT,
-            sources TEXT,
-            hit_count INTEGER DEFAULT 1,
-            last_hit TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    ''')
-    db.commit()
+    # Create semantic_cache table if missing
+    try:
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS semantic_cache (
+                id SERIAL PRIMARY KEY,
+                question TEXT UNIQUE,
+                embedding BYTEA,
+                answer TEXT,
+                sources TEXT,
+                hit_count INTEGER DEFAULT 1,
+                last_hit TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        db.commit()
+    except Exception: db.rollback()
 
 def init_db():
-    """Initialize database tables if they don't exist"""
+    """Initialize PostgreSQL database tables if they don't exist"""
     db = get_db()
     cursor = db.cursor()
     
     # Users table
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            email TEXT UNIQUE NOT NULL,
-            created_at TIMESTAMP DEFAULT (datetime('now', '+5 hours', '30 minutes')),
+            id SERIAL PRIMARY KEY,
+            email VARCHAR(255) UNIQUE NOT NULL,
+            created_at TIMESTAMP DEFAULT (NOW() + INTERVAL '5 hours 30 minutes'),
             total_queries INTEGER DEFAULT 0,
-            otp TEXT,
-            otp_expiry TEXT,
-            verified INTEGER DEFAULT 0
+            otp VARCHAR(10),
+            otp_expiry TIMESTAMP,
+            verified INTEGER DEFAULT 0,
+            last_login TIMESTAMP
         )
     ''')
     
     # Policies table
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS policies (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT UNIQUE NOT NULL,
+            id SERIAL PRIMARY KEY,
+            name VARCHAR(255) UNIQUE NOT NULL,
             file_path TEXT,
             pages INTEGER,
             chunks INTEGER,
-            uploaded_by TEXT,
-            uploaded_at TIMESTAMP DEFAULT (datetime('now', '+5 hours', '30 minutes'))
+            uploaded_by VARCHAR(255),
+            uploaded_at TIMESTAMP DEFAULT (NOW() + INTERVAL '5 hours 30 minutes'),
+            policy_type VARCHAR(100) DEFAULT 'General',
+            extracted_sections TEXT
         )
     ''')
     
     # Embeddings table
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS embeddings (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            policy_id INTEGER,
+            id SERIAL PRIMARY KEY,
+            policy_id INTEGER REFERENCES policies (id) ON DELETE CASCADE,
             chunk_index INTEGER,
             text TEXT,
-            embedding BLOB,
+            embedding BYTEA,
             page_number INTEGER,
             section_title TEXT,
-            FOREIGN KEY (policy_id) REFERENCES policies (id)
+            is_header BOOLEAN DEFAULT FALSE
         )
     ''')
     
     # Chat history table
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS chat_history (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_email TEXT,
+            id SERIAL PRIMARY KEY,
+            user_email VARCHAR(255),
             question TEXT,
             answer TEXT,
             sources TEXT,
-            timestamp TIMESTAMP DEFAULT (datetime('now', '+5 hours', '30 minutes')),
-            FOREIGN KEY (user_email) REFERENCES users (email)
+            timestamp TIMESTAMP DEFAULT (NOW() + INTERVAL '5 hours 30 minutes'),
+            satisfaction BOOLEAN,
+            duration FLOAT,
+            confidence FLOAT,
+            model_used VARCHAR(100) DEFAULT 'phi3:mini'
         )
     ''')
     
     # Admin logs table
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS admin_logs (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            admin TEXT,
+            id SERIAL PRIMARY KEY,
+            admin VARCHAR(255),
             action TEXT,
             details TEXT,
-            timestamp TIMESTAMP DEFAULT (datetime('now', '+5 hours', '30 minutes'))
+            timestamp TIMESTAMP DEFAULT (NOW() + INTERVAL '5 hours 30 minutes')
         )
     ''')
 
     # Pending OTPs table
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS pending_otps (
-            email TEXT PRIMARY KEY,
-            otp TEXT,
-            otp_expiry TEXT
+            email VARCHAR(255) PRIMARY KEY,
+            otp VARCHAR(10),
+            otp_expiry TIMESTAMP
         )
     ''')
     
     db.commit()
     
-    # Run migration to add new columns
+    # Run migration to add missing columns
     migrate_database()
     
-    print("✅ Database initialized successfully!")
+    print("✅ PostgreSQL Database initialized successfully!")

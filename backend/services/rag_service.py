@@ -183,6 +183,8 @@ def cosine_similarity(a_bytes, b_bytes):
     except Exception as e:
         return 0
 
+import psycopg2
+
 def check_semantic_cache(question_embedding_bytes, threshold=0.88):
     try:
         db = get_db()
@@ -200,7 +202,7 @@ def check_semantic_cache(question_embedding_bytes, threshold=0.88):
         best_match_q = None
         
         for item in cached_items:
-            it_vec = np.frombuffer(item['embedding'], dtype=np.float32)
+            it_vec = np.frombuffer(bytes(item['embedding']), dtype=np.float32)
             it_norm = np.linalg.norm(it_vec)
             if it_norm == 0: continue
             
@@ -218,12 +220,12 @@ def check_semantic_cache(question_embedding_bytes, threshold=0.88):
                 print(f"🚀 [CACHE HIT]: Similarity {best_score:.4f} exceeds threshold {threshold}")
                 
                 match_data = db.execute(
-                    "SELECT answer, sources FROM semantic_cache WHERE id = ?",
+                    "SELECT answer, sources FROM semantic_cache WHERE id = %s",
                     (best_match_id,)
                 ).fetchone()
                 
                 db.execute(
-                    "UPDATE semantic_cache SET hit_count = hit_count + 1, last_hit = (datetime('now', '+5 hours', '30 minutes')) WHERE id = ?",
+                    "UPDATE semantic_cache SET hit_count = hit_count + 1, last_hit = (NOW() + INTERVAL '5 hours 30 minutes') WHERE id = %s",
                     (best_match_id,)
                 )
                 db.commit()
@@ -240,8 +242,11 @@ def add_to_semantic_cache(question, embedding_bytes, answer, sources_json):
     try:
         db = get_db()
         db.execute(
-            "INSERT OR REPLACE INTO semantic_cache (question, embedding, answer, sources) VALUES (?, ?, ?, ?)",
-            (question, embedding_bytes, answer, sources_json)
+            '''INSERT INTO semantic_cache (question, embedding, answer, sources) 
+               VALUES (%s, %s, %s, %s)
+               ON CONFLICT (question) 
+               DO UPDATE SET embedding = EXCLUDED.embedding, answer = EXCLUDED.answer, sources = EXCLUDED.sources''',
+            (question, psycopg2.Binary(embedding_bytes), answer, sources_json)
         )
         db.commit()
         print(f"💾 [CACHE STORE]: Cached new question '{question}'")
@@ -285,7 +290,7 @@ def semantic_search(query, n_results=15, min_score=0.25, pdf_filter=None, query_
         '''
         params = []
         if pdf_filter:
-            query_str += " WHERE p.name = ?"
+            query_str += " WHERE p.name = %s"
             params.append(pdf_filter)
             
         chunks = db.execute(query_str, params).fetchall()
@@ -296,7 +301,7 @@ def semantic_search(query, n_results=15, min_score=0.25, pdf_filter=None, query_
         scored_results = []
         for chunk in chunks:
             if chunk['embedding']:
-                chunk_vec = np.frombuffer(chunk['embedding'], dtype=np.float32)
+                chunk_vec = np.frombuffer(bytes(chunk['embedding']), dtype=np.float32)
                 similarity = float(np.dot(query_np, chunk_vec) / 
                                  (np.linalg.norm(query_np) * np.linalg.norm(chunk_vec)))
                 

@@ -29,15 +29,15 @@ def admin_model_metrics():
     """Return per-model evaluation metrics plus system-wide averages."""
     db = get_db()
     admin_emails = list(ADMIN_EMAIL_MAPPINGS.values())
-    placeholders = ', '.join(['?'] * len(admin_emails))
+    placeholders = ', '.join(['%s'] * len(admin_emails))
 
     rows = db.execute(f'''
         SELECT
             COALESCE(model_used, 'Phi-3 Mini') AS model_name,
             COUNT(*) AS total_queries,
-            ROUND(AVG(CASE WHEN duration > 0 THEN duration END), 2) AS avg_latency,
-            ROUND(AVG(CASE WHEN confidence > 0 THEN confidence END), 4) AS avg_confidence,
-            SUM(CASE WHEN satisfaction = 1 THEN 1 ELSE 0 END) AS positive,
+            ROUND(CAST(AVG(CASE WHEN duration > 0 THEN duration END) AS numeric), 2) AS avg_latency,
+            ROUND(CAST(AVG(CASE WHEN confidence > 0 THEN confidence END) AS numeric), 4) AS avg_confidence,
+            SUM(CASE WHEN satisfaction = TRUE THEN 1 ELSE 0 END) AS positive,
             SUM(CASE WHEN satisfaction IS NOT NULL THEN 1 ELSE 0 END) AS rated
         FROM chat_history
         WHERE user_email NOT IN ({placeholders})
@@ -50,11 +50,11 @@ def admin_model_metrics():
         rated = r['rated'] or 0
         positive = r['positive'] or 0
         satisfaction = round(positive / rated * 100, 1) if rated > 0 else None
-        avg_conf = r['avg_confidence'] or 0
+        avg_conf = float(r['avg_confidence'] or 0)
         models.append({
             'model': r['model_name'],
             'total_queries': r['total_queries'],
-            'avg_latency': r['avg_latency'] or 0,
+            'avg_latency': float(r['avg_latency'] or 0),
             'avg_confidence': round(avg_conf * 100, 1),
             'satisfaction_rate': satisfaction,
             'rated_count': rated,
@@ -63,9 +63,9 @@ def admin_model_metrics():
     overall = db.execute(f'''
         SELECT
             COUNT(*) AS total_queries,
-            ROUND(AVG(CASE WHEN duration > 0 THEN duration END), 2) AS avg_latency,
-            ROUND(AVG(CASE WHEN confidence > 0 THEN confidence END), 4) AS avg_confidence,
-            SUM(CASE WHEN satisfaction = 1 THEN 1 ELSE 0 END) AS positive,
+            ROUND(CAST(AVG(CASE WHEN duration > 0 THEN duration END) AS numeric), 2) AS avg_latency,
+            ROUND(CAST(AVG(CASE WHEN confidence > 0 THEN confidence END) AS numeric), 4) AS avg_confidence,
+            SUM(CASE WHEN satisfaction = TRUE THEN 1 ELSE 0 END) AS positive,
             SUM(CASE WHEN satisfaction IS NOT NULL THEN 1 ELSE 0 END) AS rated
         FROM chat_history
         WHERE user_email NOT IN ({placeholders})
@@ -75,8 +75,8 @@ def admin_model_metrics():
     o_positive = overall['positive'] or 0
     avg = {
         'total_queries': overall['total_queries'] or 0,
-        'avg_latency': overall['avg_latency'] or 0,
-        'avg_confidence': round((overall['avg_confidence'] or 0) * 100, 1),
+        'avg_latency': float(overall['avg_latency'] or 0),
+        'avg_confidence': round(float(overall['avg_confidence'] or 0) * 100, 1),
         'satisfaction_rate': round(o_positive / o_rated * 100, 1) if o_rated > 0 else None,
     }
 
@@ -87,7 +87,7 @@ def admin_model_metrics():
 def admin_users():
     db = get_db()
     admin_emails = list(ADMIN_EMAIL_MAPPINGS.values())
-    placeholders = ', '.join(['?'] * len(admin_emails))
+    placeholders = ', '.join(['%s'] * len(admin_emails))
     
     query = f'SELECT email, created_at, total_queries FROM users WHERE verified = 1 AND email NOT IN ({placeholders}) ORDER BY created_at DESC'
     return jsonify([dict(u) for u in db.execute(query, admin_emails).fetchall()])
@@ -109,4 +109,4 @@ def admin_chats():
 @authenticate_admin
 def admin_user_chats(email):
     db = get_db()
-    return jsonify({'chats': [dict(c) for c in db.execute('SELECT question, answer, timestamp, satisfaction FROM chat_history WHERE user_email = ? ORDER BY timestamp DESC', (email,)).fetchall()]})
+    return jsonify({'chats': [dict(c) for c in db.execute('SELECT question, answer, timestamp, satisfaction FROM chat_history WHERE user_email = %s ORDER BY timestamp DESC', (email,)).fetchall()]})

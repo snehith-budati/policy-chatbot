@@ -51,22 +51,22 @@ def authenticate_admin(f):
             db = get_db()
 
             try:
-                user_rec = db.execute('SELECT verified, last_login FROM users WHERE email = ?', (admin_email,)).fetchone()
+                user_rec = db.execute('SELECT verified, last_login FROM users WHERE email = %s', (admin_email,)).fetchone()
                 if user_rec and user_rec['verified'] == 1 and user_rec['last_login']:
-                    last_login = ensure_ist(datetime.fromisoformat(user_rec['last_login']))
+                    last_login = ensure_ist(user_rec['last_login'])
                     if get_ist_now() < (last_login + timedelta(hours=2)):
                         return f(*args, **kwargs)
             except Exception as e:
                 print(f"🔐 [AUTH DEBUG]: Admin session bypass check failed: {e}")
 
-            user = db.execute('SELECT otp, otp_expiry FROM pending_otps WHERE email = ?', (admin_email,)).fetchone()
+            user = db.execute('SELECT otp, otp_expiry FROM pending_otps WHERE email = %s', (admin_email,)).fetchone()
             
             if user and user['otp'] and user['otp'] == otp_input:
-                expiry = ensure_ist(datetime.fromisoformat(user['otp_expiry']))
+                expiry = ensure_ist(user['otp_expiry'])
                 if get_ist_now() < expiry:
                     try:
                         new_expiry = (get_ist_now() + timedelta(minutes=30)).isoformat()
-                        db.execute('UPDATE pending_otps SET otp_expiry = ? WHERE email = ?', (new_expiry, admin_email))
+                        db.execute('UPDATE pending_otps SET otp_expiry = %s WHERE email = %s', (new_expiry, admin_email))
                         db.commit()
                     except Exception as e:
                         print(f"🔐 [AUTH DEBUG]: Failed to extend OTP expiry: {e}")

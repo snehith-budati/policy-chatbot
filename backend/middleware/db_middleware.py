@@ -1,29 +1,29 @@
 import json
-import sqlite3
 import typing
 from collections import Counter
+import psycopg2
 from core.db import get_db, get_ist_now
 from services.rag_service import create_embedding
 
 def save_policy_with_chunks(filename, filepath, pages_count, chunks, uploaded_by, policy_type="General"):
-    """Middleware: Handles saving policy record and chunk embeddings into SQLite database"""
-    conn = typing.cast(sqlite3.Connection, get_db())
+    """Middleware: Handles saving policy record and chunk embeddings into PostgreSQL database"""
+    conn = get_db()
     
     # Remove existing policy with same name if exists
-    existing = conn.execute('SELECT id FROM policies WHERE name = ?', (filename,)).fetchone()
+    existing = conn.execute('SELECT id FROM policies WHERE name = %s', (filename,)).fetchone()
     if existing:
-        conn.execute('DELETE FROM embeddings WHERE policy_id = ?', (existing['id'],))
-        conn.execute('DELETE FROM policies WHERE id = ?', (existing['id'],))
+        conn.execute('DELETE FROM embeddings WHERE policy_id = %s', (existing['id'],))
+        conn.execute('DELETE FROM policies WHERE id = %s', (existing['id'],))
         conn.commit()
     
     # Insert new policy record
     cursor = conn.execute(
         '''INSERT INTO policies 
            (name, file_path, pages, chunks, uploaded_by, uploaded_at, policy_type) 
-           VALUES (?, ?, ?, ?, ?, ?, ?)''',
+           VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING id''',
         (filename, filepath, pages_count, len(chunks), uploaded_by, get_ist_now().isoformat(), policy_type)
     )
-    policy_id = cursor.lastrowid
+    policy_id = cursor.fetchone()['id']
     
     # Insert chunk embeddings
     successful_chunks = 0
@@ -33,8 +33,8 @@ def save_policy_with_chunks(filename, filepath, pages_count, chunks, uploaded_by
             conn.execute(
                 '''INSERT INTO embeddings 
                    (policy_id, chunk_index, text, embedding, page_number, section_title, is_header) 
-                   VALUES (?, ?, ?, ?, ?, ?, ?)''',
-                (policy_id, chunk['chunk_index'], chunk['text'], embedding, 
+                   VALUES (%s, %s, %s, %s, %s, %s, %s)''',
+                (policy_id, chunk['chunk_index'], chunk['text'], psycopg2.Binary(embedding), 
                  chunk['page'], chunk['section'], chunk.get('is_header', False))
             )
             successful_chunks += 1
@@ -56,15 +56,15 @@ def fetch_all_policies():
 def fetch_policy_by_name(filename):
     """Middleware: Retrieve single policy record by filename"""
     db = get_db()
-    return db.execute('SELECT * FROM policies WHERE name = ?', (filename,)).fetchone()
+    return db.execute('SELECT * FROM policies WHERE name = %s', (filename,)).fetchone()
 
 def delete_policy_record(pdf_name):
     """Middleware: Delete policy record and associated embeddings"""
     db = get_db()
-    policy = db.execute('SELECT id FROM policies WHERE name = ?', (pdf_name,)).fetchone()
+    policy = db.execute('SELECT id FROM policies WHERE name = %s', (pdf_name,)).fetchone()
     if policy:
-        db.execute('DELETE FROM embeddings WHERE policy_id = ?', (policy['id'],))
-        db.execute('DELETE FROM policies WHERE id = ?', (policy['id'],))
+        db.execute('DELETE FROM embeddings WHERE policy_id = %s', (policy['id'],))
+        db.execute('DELETE FROM policies WHERE id = %s', (policy['id'],))
         db.commit()
         return True
     return False
@@ -75,65 +75,69 @@ def fetch_policy_chunks_for_compare(policy_id):
     return db.execute('''
         SELECT text, page_number 
         FROM embeddings 
-        WHERE policy_id = ? 
+        WHERE policy_id = %s 
         ORDER BY page_number, chunk_index
     ''', (policy_id,)).fetchall()
 
 def fetch_user_by_email(email):
     """Middleware: Retrieve user record by email"""
     db = get_db()
-    return db.execute('SELECT * FROM users WHERE email = ?', (email,)).fetchone()
+    return db.execute('SELECT * FROM users WHERE email = %s', (email,)).fetchone()
 
 def check_user_has_feedback(email):
     """Middleware: Check if user has submitted feedback"""
     db = get_db()
-    return db.execute('SELECT 1 FROM feedback_ratings WHERE user_email = ? LIMIT 1', (email,)).fetchone() is not None
+    return db.execute('SELECT 1 FROM feedback_ratings WHERE user_email = %s LIMIT 1', (email,)).fetchone() is not None
 
 def fetch_pending_otp(email):
     """Middleware: Get pending OTP record for email"""
     db = get_db()
-    return db.execute('SELECT otp, otp_expiry FROM pending_otps WHERE email = ?', (email,)).fetchone()
+    return db.execute('SELECT otp, otp_expiry FROM pending_otps WHERE email = %s', (email,)).fetchone()
 
 def save_pending_otp(email, otp, expiry):
     """Middleware: Save or update pending OTP record"""
     db = get_db()
-    db.execute('INSERT OR REPLACE INTO pending_otps (email, otp, otp_expiry) VALUES (?, ?, ?)', (email, otp, expiry))
+    db.execute('''
+        INSERT INTO pending_otps (email, otp, otp_expiry) 
+        VALUES (%s, %s, %s)
+        ON CONFLICT (email) 
+        DO UPDATE SET otp = EXCLUDED.otp, otp_expiry = EXCLUDED.otp_expiry
+    ''', (email, otp, expiry))
     db.commit()
 
 def mark_user_verified(email):
     """Middleware: Mark user as verified and update last_login"""
     db = get_db()
-    db.execute('INSERT OR IGNORE INTO users (email) VALUES (?)', (email,))
-    db.execute('UPDATE users SET verified = 1, last_login = ? WHERE email = ?', (get_ist_now().isoformat(), email))
-    db.execute('DELETE FROM pending_otps WHERE email = ?', (email,))
+    db.execute('INSERT INTO users (email) VALUES (%s) ON CONFLICT (email) DO NOTHING', (email,))
+    db.execute('UPDATE users SET verified = 1, last_login = %s WHERE email = %s', (get_ist_now().isoformat(), email))
+    db.execute('DELETE FROM pending_otps WHERE email = %s', (email,))
     db.commit()
 
 def save_chat_record(user_email, question, answer, sources_json, duration=0.0, confidence=0.0, model_used='Phi-3 Mini'):
     """Middleware: Insert chat interaction record and update user query count"""
     db = get_db()
-    cursor = db.cursor()
-    cursor.execute("""
+    cursor = db.execute("""
         INSERT INTO chat_history 
         (user_email, question, answer, sources, timestamp, duration, confidence, model_used) 
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s) RETURNING id
     """, (user_email, question, answer, sources_json, get_ist_now().isoformat(), duration, confidence, model_used))
     
-    chat_id = cursor.lastrowid
-    cursor.execute("INSERT OR IGNORE INTO users (email, total_queries) VALUES (?, 1)", (user_email,))
-    cursor.execute("UPDATE users SET total_queries = total_queries + 1 WHERE email = ?", (user_email,))
+    chat_id = cursor.fetchone()['id']
+    db.execute("INSERT INTO users (email, total_queries) VALUES (%s, 1) ON CONFLICT (email) DO NOTHING", (user_email,))
+    db.execute("UPDATE users SET total_queries = total_queries + 1 WHERE email = %s", (user_email,))
     db.commit()
     return chat_id
 
 def update_chat_satisfaction(chat_id, satisfaction):
     """Middleware: Update satisfaction rating for a chat ID"""
     db = get_db()
-    db.execute("UPDATE chat_history SET satisfaction = ? WHERE id = ?", (satisfaction, chat_id))
+    db.execute("UPDATE chat_history SET satisfaction = %s WHERE id = %s", (satisfaction, chat_id))
     db.commit()
 
 def save_user_feedback(user_email, stars, review=""):
     """Middleware: Save user feedback rating and review"""
     db = get_db()
-    db.execute("INSERT INTO feedback_ratings (user_email, stars, review, timestamp) VALUES (?, ?, ?, ?)",
+    db.execute("INSERT INTO feedback_ratings (user_email, stars, review, timestamp) VALUES (%s, %s, %s, %s)",
                (user_email, stars, review, get_ist_now().isoformat()))
     db.commit()
 
@@ -149,7 +153,7 @@ def reset_all_database_records():
 def fetch_admin_dashboard_stats(admin_emails):
     """Middleware: Query stats for admin dashboard"""
     db = get_db()
-    placeholders = ', '.join(['?'] * len(admin_emails))
+    placeholders = ', '.join(['%s'] * len(admin_emails))
     
     recent_uploads = db.execute('''
         SELECT name, pages, chunks, uploaded_by, uploaded_at, policy_type 
@@ -173,16 +177,16 @@ def fetch_admin_dashboard_stats(admin_emails):
 def fetch_admin_analytics_data(admin_emails):
     """Middleware: Query analytics matrix for admin dashboard"""
     db = get_db()
-    placeholders = ', '.join(['?'] * len(admin_emails))
+    placeholders = ', '.join(['%s'] * len(admin_emails))
     
     total_with_satisfaction = db.execute(f'SELECT COUNT(*) as count FROM chat_history WHERE satisfaction IS NOT NULL AND user_email NOT IN ({placeholders})', admin_emails).fetchone()['count']
-    positive_satisfaction = db.execute(f'SELECT COUNT(*) as count FROM chat_history WHERE satisfaction = 1 AND user_email NOT IN ({placeholders})', admin_emails).fetchone()['count']
+    positive_satisfaction = db.execute(f'SELECT COUNT(*) as count FROM chat_history WHERE satisfaction = TRUE AND user_email NOT IN ({placeholders})', admin_emails).fetchone()['count']
     satisfaction_rate = (positive_satisfaction / total_with_satisfaction * 100) if total_with_satisfaction > 0 else 0
     
     daily_queries = db.execute(f'''
         SELECT DATE(timestamp) as date, COUNT(*) as count 
         FROM chat_history 
-        WHERE timestamp >= date('now', '-14 days') AND user_email NOT IN ({placeholders})
+        WHERE timestamp >= (CURRENT_DATE - INTERVAL '14 days') AND user_email NOT IN ({placeholders})
         GROUP BY DATE(timestamp)
         ORDER BY date ASC
     ''', admin_emails).fetchall()
@@ -236,7 +240,7 @@ def fetch_admin_analytics_data(admin_emails):
 def delete_user_and_history(email):
     """Middleware: Delete user and foreign key chat history/feedback"""
     db = get_db()
-    db.execute('DELETE FROM chat_history WHERE user_email = ?', (email,))
-    db.execute('DELETE FROM feedback_ratings WHERE user_email = ?', (email,))
-    db.execute('DELETE FROM users WHERE email = ?', (email,))
+    db.execute('DELETE FROM chat_history WHERE user_email = %s', (email,))
+    db.execute('DELETE FROM feedback_ratings WHERE user_email = %s', (email,))
+    db.execute('DELETE FROM users WHERE email = %s', (email,))
     db.commit()

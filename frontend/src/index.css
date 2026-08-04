@@ -38,7 +38,7 @@ body::after {
   left: 0;
   width: 150vw;
   height: 150vh;
-  background-image: url('./slogo.png');
+  background-image: url('./assets/slogo.png');
   background-repeat: no-repeat;
   background-position: center;
   background-size: 50vw;

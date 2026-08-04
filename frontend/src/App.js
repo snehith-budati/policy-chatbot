@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
-import ChatApp from "./ChatApp";
-import Admin from "./Admin";
-import SystemOverview from "./SystemOverview";
+import ChatApp from "./pages/ChatApp";
+import Admin from "./pages/Admin";
+import SystemOverview from "./pages/SystemOverview";
 import "./App.css";
 
 function App() {

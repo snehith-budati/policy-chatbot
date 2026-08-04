@@ -222,5 +222,5 @@ body::after {
 }
 
 /* Import other CSS files */
-@import url('./ChatApp.css');
-@import url('./Admin.css');
+@import url('./pages/ChatApp.css');
+@import url('./pages/Admin.css');

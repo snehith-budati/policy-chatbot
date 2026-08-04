@@ -1,9 +1,14 @@
 from flask import Blueprint, request, jsonify
 
-from core.db import get_db, log_admin_action
+from core.db import log_admin_action
 from core.auth import authenticate_admin, ADMIN_EMAIL_MAPPINGS
-from middleware.db_middleware import (
-    fetch_admin_dashboard_stats, fetch_admin_analytics_data,
+from middleware.business_layer import (
+    fetch_admin_dashboard_stats,
+    fetch_admin_analytics_data,
+    fetch_admin_model_metrics,
+    fetch_admin_users,
+    fetch_admin_chats,
+    fetch_admin_user_chats,
     delete_user_and_history
 )
 
@@ -26,75 +31,23 @@ def admin_analytics():
 @admin_bp.route('/admin/model-metrics', methods=['GET'])
 @authenticate_admin
 def admin_model_metrics():
-    """Return per-model evaluation metrics plus system-wide averages."""
-    db = get_db()
+    """Return per-model evaluation metrics plus system-wide averages using business layer."""
     admin_emails = list(ADMIN_EMAIL_MAPPINGS.values())
-    placeholders = ', '.join(['%s'] * len(admin_emails))
-
-    rows = db.execute(f'''
-        SELECT
-            COALESCE(model_used, 'Phi-3 Mini') AS model_name,
-            COUNT(*) AS total_queries,
-            ROUND(CAST(AVG(CASE WHEN duration > 0 THEN duration END) AS numeric), 2) AS avg_latency,
-            ROUND(CAST(AVG(CASE WHEN confidence > 0 THEN confidence END) AS numeric), 4) AS avg_confidence,
-            SUM(CASE WHEN satisfaction = TRUE THEN 1 ELSE 0 END) AS positive,
-            SUM(CASE WHEN satisfaction IS NOT NULL THEN 1 ELSE 0 END) AS rated
-        FROM chat_history
-        WHERE user_email NOT IN ({placeholders})
-        GROUP BY model_name
-        ORDER BY total_queries DESC
-    ''', admin_emails).fetchall()
-
-    models = []
-    for r in rows:
-        rated = r['rated'] or 0
-        positive = r['positive'] or 0
-        satisfaction = round(positive / rated * 100, 1) if rated > 0 else None
-        avg_conf = float(r['avg_confidence'] or 0)
-        models.append({
-            'model': r['model_name'],
-            'total_queries': r['total_queries'],
-            'avg_latency': float(r['avg_latency'] or 0),
-            'avg_confidence': round(avg_conf * 100, 1),
-            'satisfaction_rate': satisfaction,
-            'rated_count': rated,
-        })
-
-    overall = db.execute(f'''
-        SELECT
-            COUNT(*) AS total_queries,
-            ROUND(CAST(AVG(CASE WHEN duration > 0 THEN duration END) AS numeric), 2) AS avg_latency,
-            ROUND(CAST(AVG(CASE WHEN confidence > 0 THEN confidence END) AS numeric), 4) AS avg_confidence,
-            SUM(CASE WHEN satisfaction = TRUE THEN 1 ELSE 0 END) AS positive,
-            SUM(CASE WHEN satisfaction IS NOT NULL THEN 1 ELSE 0 END) AS rated
-        FROM chat_history
-        WHERE user_email NOT IN ({placeholders})
-    ''', admin_emails).fetchone()
-
-    o_rated = overall['rated'] or 0
-    o_positive = overall['positive'] or 0
-    avg = {
-        'total_queries': overall['total_queries'] or 0,
-        'avg_latency': float(overall['avg_latency'] or 0),
-        'avg_confidence': round(float(overall['avg_confidence'] or 0) * 100, 1),
-        'satisfaction_rate': round(o_positive / o_rated * 100, 1) if o_rated > 0 else None,
-    }
-
-    return jsonify({'models': models, 'overall': avg})
+    metrics = fetch_admin_model_metrics(admin_emails)
+    return jsonify(metrics)
 
 @admin_bp.route('/admin/users', methods=['GET'])
 @authenticate_admin
 def admin_users():
-    db = get_db()
+    """Return list of non-admin verified users using business layer."""
     admin_emails = list(ADMIN_EMAIL_MAPPINGS.values())
-    placeholders = ', '.join(['%s'] * len(admin_emails))
-    
-    query = f'SELECT email, created_at, total_queries FROM users WHERE verified = 1 AND email NOT IN ({placeholders}) ORDER BY created_at DESC'
-    return jsonify([dict(u) for u in db.execute(query, admin_emails).fetchall()])
+    users = fetch_admin_users(admin_emails)
+    return jsonify(users)
 
 @admin_bp.route('/admin/users/<email>', methods=['DELETE'])
 @authenticate_admin
 def admin_delete_user(email):
+    """Delete user and user chat history using business layer."""
     delete_user_and_history(email)
     log_admin_action(request.authorization.username if request.authorization else "Admin", "DELETE_USER", f"Deleted user: {email}")
     return jsonify({'success': True})
@@ -102,11 +55,13 @@ def admin_delete_user(email):
 @admin_bp.route('/admin/chats', methods=['GET'])
 @authenticate_admin
 def admin_chats():
-    db = get_db()
-    return jsonify({'chats': [dict(c) for c in db.execute('SELECT user_email as user, question, answer, timestamp, satisfaction, sources FROM chat_history ORDER BY timestamp DESC LIMIT 100').fetchall()]})
+    """Return recent global chats using business layer."""
+    chats = fetch_admin_chats()
+    return jsonify({'chats': chats})
 
 @admin_bp.route('/admin/chats/user/<email>', methods=['GET'])
 @authenticate_admin
 def admin_user_chats(email):
-    db = get_db()
-    return jsonify({'chats': [dict(c) for c in db.execute('SELECT question, answer, timestamp, satisfaction FROM chat_history WHERE user_email = %s ORDER BY timestamp DESC', (email,)).fetchall()]})
+    """Return chats for a specific user using business layer."""
+    chats = fetch_admin_user_chats(email)
+    return jsonify({'chats': chats})

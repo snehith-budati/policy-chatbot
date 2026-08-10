@@ -25,7 +25,7 @@ const SystemOverview = () => {
             </header>
 
             <main className="overview-main">
-                {/* SECTION 1: SYSTEM ABSTRACTION */}
+
                 <section className="overview-section abstraction-section glass-card entrance-anim">
                     <div className="section-badge">CHAPTER 01</div>
                     <div className="abstraction-container">
@@ -286,7 +286,7 @@ const SystemOverview = () => {
                         </div>
                     </div>
                 </section>
-                {/* SECTION 3: LLM MODEL ENCYCLOPEDIA */}
+
                 <section className="overview-section glass-card entrance-anim">
                     <div className="section-badge">CHAPTER 02</div>
                     <h2>LLM Model Encyclopedia</h2>
@@ -338,7 +338,7 @@ const SystemOverview = () => {
                     </div>
                 </section>
 
-                {/* SECTION 4: OCR MODELS */}
+
                 <section className="overview-section glass-card entrance-anim alternate">
                     <div className="section-badge">CHAPTER 03</div>
                     <h2>OCR Models</h2>
@@ -350,7 +350,7 @@ const SystemOverview = () => {
 
                                 <path d="M110 150 H180" stroke="#CBD5E1" strokeWidth="2" strokeDasharray="4" />
 
-                                {/* Logical Switch */}
+
                                 <g transform="translate(180, 100)">
                                     <polygon points="0,50 50,0 100,50 50,100" fill="rgba(37, 99, 235, 0.05)" stroke="#2563EB" />
                                     <text x="50" y="55" textAnchor="middle" fill="#2563EB" fontSize="10" fontWeight="bold">TYPE CHECK</text>
@@ -472,7 +472,7 @@ const SystemOverview = () => {
                             )}
                         </div>
 
-                        {/* 2. FUNCTION REGISTRY (app.py) */}
+
                         <div className={`registry-card glass-card ${openRegistry === 'backend' ? 'open' : ''}`} onClick={() => toggleRegistry('backend')}>
                             <div className="registry-header">
                                 <div className="header-label">
@@ -597,7 +597,7 @@ const SystemOverview = () => {
                     </div>
                 </section>
 
-                {/* SECTION 9: RESOURCE FOOTPRINT & EFFICACY */}
+
                 <section className="overview-section metrics-section entrance-anim">
                     <div className="section-badge">PERFORMANCE</div>
                     <h2>Resource Footprint</h2>
@@ -627,7 +627,7 @@ const SystemOverview = () => {
                     </div>
                 </section>
 
-                {/* SECTION 10: INSTITUTIONAL IMPACT MATRIX */}
+
                 <section className="overview-section impact-section entrance-anim">
                     <div className="section-badge">CAMPUS IMPACT</div>
                     <h2>Institutional Impact Matrix</h2>
@@ -649,7 +649,7 @@ const SystemOverview = () => {
                     </div>
                 </section>
 
-                {/* SECTION: ARCHITECTURAL EVOLUTION & SYSTEM UPDATES */}
+
                 <section className="overview-section evolution-section entrance-anim glass-card">
                     <div className="section-badge highlight">ARCHITECTURAL EVOLUTION</div>
                     <h2>System Refactoring & Latest Upgrades</h2>
@@ -754,7 +754,7 @@ const SystemOverview = () => {
                     </div>
                 </section>
 
-                {/* SECTION 11: EVOLUTION ROADMAP */}
+
                 <section className="overview-section roadmap-section entrance-anim">
                     <div className="section-badge">FUTURE PLAN</div>
                     <h2>Evolution Roadmap</h2>
@@ -783,7 +783,7 @@ const SystemOverview = () => {
                     </div>
                 </section>
 
-                {/* SECTION 5: SUSTAINABLE AI & BITNET */}
+
                 <section className="overview-section bitnet-section entrance-anim glass-card">
                     <div className="section-badge highlight">NEXT-GEN TECHNOLOGY</div>
                     <div className="bitnet-container">
@@ -823,7 +823,7 @@ const SystemOverview = () => {
                     </div>
                 </section>
 
-                {/* BOTTOM SECURITY FEATURES (Moved from CH 5) */}
+
                 <section className="overview-section security-section bottom-security entrance-anim">
                     <div className="security-grid">
                         <div className="security-card glass-card">
@@ -844,7 +844,7 @@ const SystemOverview = () => {
                     </div>
                 </section>
 
-                {/* SECTION 6: THE PROJECT REGISTRY (COLLAPSIBLE) */}
+
 
             </main>
 

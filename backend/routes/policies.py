@@ -13,13 +13,11 @@ policies_bp = Blueprint('policies', __name__)
 
 @policies_bp.route('/policies', methods=['GET'])
 def get_policies():
-    """Get all uploaded policies using database middleware"""
     policies = fetch_all_policies()
     return jsonify([dict(p) for p in policies])
 
 @policies_bp.route('/policies/<path:pdf_name>/view', methods=['GET'])
 def view_policy_pdf(pdf_name):
-    """Serve PDF for authenticated users to view"""
     try:
         user_email = request.headers.get('X-User-Email') or request.args.get('user_email')
         
@@ -48,7 +46,6 @@ def view_policy_pdf(pdf_name):
 
 @policies_bp.route('/policies/<path:pdf_name>/compare', methods=['GET'])
 def get_policy_for_comparison(pdf_name):
-    """Fetches both the PDF file and its extracted text for comparison using middleware"""
     try:
         upload_folder = current_app.config['UPLOAD_FOLDER']
         pdf_path = os.path.join(upload_folder, secure_filename(pdf_name))
@@ -76,14 +73,12 @@ def get_policy_for_comparison(pdf_name):
 @policies_bp.route('/serve-pdf/<filename>', methods=['GET'])
 @authenticate_admin
 def serve_pdf(filename):
-    """Serves the PDF file with proper header-based authentication."""
     upload_folder = current_app.config['UPLOAD_FOLDER']
     return send_from_directory(upload_folder, secure_filename(filename))
 
 @policies_bp.route('/policies/<path:pdf_name>', methods=['DELETE'])
 @authenticate_admin
 def delete_policy(pdf_name):
-    """Delete a policy by filename using database middleware"""
     success = delete_policy_record(pdf_name)
     if success:
         admin_user = request.authorization.username if request.authorization else "Admin"
@@ -94,7 +89,6 @@ def delete_policy(pdf_name):
 @policies_bp.route('/debug/policy/<filename>', methods=['GET'])
 @authenticate_admin
 def debug_policy(filename):
-    """Debug info for a specific policy using middleware"""
     policy = fetch_policy_by_name(filename)
     if not policy:
         return jsonify({'error': 'Policy not found'}), 404

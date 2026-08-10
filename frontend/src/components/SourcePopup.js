@@ -1,4 +1,3 @@
-// #Added on 4th March - Source Popup Component
 import React from 'react';
 import './SourcePopup.css';
 

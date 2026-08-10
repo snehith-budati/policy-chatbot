@@ -56,7 +56,6 @@ def request_otp():
     if not is_admin and (not email or not validate_srm_email(email)):
         return jsonify({'error': 'Error: Invalid username or password. Please try again.'}), 400
 
-    # IF OTP IS DISABLED: Perform immediate direct login bypass
     if not is_otp_enabled():
         try:
             mark_user_verified(email)
@@ -124,7 +123,6 @@ def request_otp():
 
 @auth_bp.route('/auth/validate', methods=['POST'])
 def validate_email():
-    """Validates the OTP inputted by the user using middleware."""
     data = request.json
     email = data.get('email')
     otp_input = data.get('otp')
@@ -132,7 +130,6 @@ def validate_email():
     if not email or not validate_srm_email(email):
         return jsonify({'error': 'Invalid email domain. Please use @srmap.edu.in'}), 400
     
-    # IF OTP IS DISABLED: Accept validation immediately
     if not is_otp_enabled():
         mark_user_verified(email)
         has_feedback = check_user_has_feedback(email)

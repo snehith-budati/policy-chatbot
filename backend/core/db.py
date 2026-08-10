@@ -5,7 +5,6 @@ from datetime import datetime, timedelta, timezone
 from flask import g
 from config import DATABASE_URL, DB_HOST, DB_NAME, DB_USER, DB_PASSWORD, DB_PORT
 
-# Add IST Timezone configuration
 IST = timezone(timedelta(hours=5, minutes=30))
 
 def get_ist_now():
@@ -25,7 +24,7 @@ def ensure_ist(dt):
     return dt.astimezone(IST)
 
 class PgConnectionWrapper:
-    """Wrapper around psycopg2 connection to mimic sqlite3 db.execute(...) interface"""
+    """Wrapper around psycopg2 connection to provide convenient db.execute(...) helper interface for PostgreSQL"""
     def __init__(self, conn):
         self._conn = conn
 
@@ -102,7 +101,23 @@ def migrate_database():
         except Exception as e:
             print(f"Note: policy_type column error: {e}")
             db.rollback()
-    
+
+    if 'category_name' not in columns:
+        try:
+            cursor.execute("ALTER TABLE policies ADD COLUMN category_name VARCHAR(255) DEFAULT 'General'")
+            print("✅ Added category_name column to policies table")
+        except Exception as e:
+            print(f"Note: category_name column error: {e}")
+            db.rollback()
+
+    if 'version_name' not in columns:
+        try:
+            cursor.execute("ALTER TABLE policies ADD COLUMN version_name VARCHAR(100) DEFAULT 'v1.0'")
+            print("✅ Added version_name column to policies table")
+        except Exception as e:
+            print(f"Note: version_name column error: {e}")
+            db.rollback()
+
     if 'extracted_sections' not in columns:
         try:
             cursor.execute("ALTER TABLE policies ADD COLUMN extracted_sections TEXT")
@@ -170,7 +185,6 @@ def migrate_database():
             print("✅ Added last_login column to users table")
         except Exception: db.rollback()
 
-    # Create feedback_ratings table if missing
     try:
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS feedback_ratings (
@@ -185,7 +199,6 @@ def migrate_database():
         
     db.commit()
 
-    # Create semantic_cache table if missing
     try:
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS semantic_cache (
@@ -207,7 +220,6 @@ def init_db():
     db = get_db()
     cursor = db.cursor()
     
-    # Users table
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS users (
             id SERIAL PRIMARY KEY,
@@ -221,7 +233,6 @@ def init_db():
         )
     ''')
     
-    # Policies table
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS policies (
             id SERIAL PRIMARY KEY,
@@ -232,11 +243,12 @@ def init_db():
             uploaded_by VARCHAR(255),
             uploaded_at TIMESTAMP DEFAULT (NOW() + INTERVAL '5 hours 30 minutes'),
             policy_type VARCHAR(100) DEFAULT 'General',
+            category_name VARCHAR(255) DEFAULT 'General',
+            version_name VARCHAR(100) DEFAULT 'v1.0',
             extracted_sections TEXT
         )
     ''')
     
-    # Embeddings table
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS embeddings (
             id SERIAL PRIMARY KEY,
@@ -250,7 +262,6 @@ def init_db():
         )
     ''')
     
-    # Chat history table
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS chat_history (
             id SERIAL PRIMARY KEY,
@@ -266,7 +277,6 @@ def init_db():
         )
     ''')
     
-    # Admin logs table
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS admin_logs (
             id SERIAL PRIMARY KEY,
@@ -277,7 +287,6 @@ def init_db():
         )
     ''')
 
-    # Pending OTPs table
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS pending_otps (
             email VARCHAR(255) PRIMARY KEY,
@@ -288,7 +297,6 @@ def init_db():
     
     db.commit()
     
-    # Run migration to add missing columns
     migrate_database()
     
     print("✅ PostgreSQL Database initialized successfully!")

@@ -25,7 +25,6 @@ run([sys.executable, 'setup_env.py', '-hr', MODEL_ID, '-q', QUANT], cwd=BITNET_D
 
 print("[3/3] Checking model status...")
 model_path = os.path.join(BITNET_DIR, 'models', 'Falcon3-1B-Instruct-1.58bit', f'ggml-model-{QUANT}.gguf')
-# Fallback check for alternate path
 if not os.path.isfile(model_path):
     model_path = os.path.join(BITNET_DIR, 'models', 'Falcon3-1B-Instruct-1.58bit', f'ggml-model-{QUANT}.gguf')
 

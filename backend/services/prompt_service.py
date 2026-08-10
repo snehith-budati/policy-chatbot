@@ -14,9 +14,6 @@ def get_system_prompt(policy_type="General", model_type="phi3"):
     return system_prompt
 
 def format_context_payload(pdf_name, policy_type, chunks, question):
-    """
-    PART 2:
-    """
     category_str = policy_type if policy_type else "General"
     
     payload = f"POLICY DOCUMENT: {pdf_name}\n"
@@ -33,8 +30,6 @@ def format_context_payload(pdf_name, policy_type, chunks, question):
     return payload
 
 def build_dynamic_prompt(pdf_name, policy_type, chunks, question, model_type="phi3"):
-    
-    # Guard: If no valid context chunks, flag low confidence
     if not chunks or len(chunks) == 0:
         return "__LOW_CONFIDENCE__"
         
@@ -46,7 +41,6 @@ def build_dynamic_prompt(pdf_name, policy_type, chunks, question, model_type="ph
     elif "qwen" in model_type.lower():
         full_prompt = f"<|im_start|>system\n{system_part}<|im_end|>\n<|im_start|>user\n{user_payload_part}<|im_end|>\n<|im_start|>assistant\n"
     else:
-        # Standard Phi-3 / Ollama format
         full_prompt = f"System:\n{system_part}\n\nUser:\n{user_payload_part}\n\nAssistant:"
         
     return full_prompt

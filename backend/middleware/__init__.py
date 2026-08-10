@@ -1,4 +1,3 @@
-# Middleware package initialization
 from middleware.business_layer import (
     fetch_admin_model_metrics,
     fetch_admin_users,

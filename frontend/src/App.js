@@ -8,16 +8,14 @@ import "./App.css";
 function App() {
   const [loading, setLoading] = useState(false);
 
-  // Show loading on route change
   useEffect(() => {
     const handleRouteChange = () => {
       setLoading(true);
       setTimeout(() => {
         setLoading(false);
-      }, 750); // Increased duration to make the cinematic wipe clearly visible
+      }, 750);
     };
 
-    // Listen for route changes
     const originalPushState = window.history.pushState;
     window.history.pushState = function () {
       originalPushState.apply(this, arguments);
@@ -33,7 +31,6 @@ function App() {
 
   return (
     <Router>
-      {/* Loading Overlay */}
       {loading && (
         <div className="page-loading-overlay">
           <div className="loading-spinner-large"></div>
@@ -41,7 +38,6 @@ function App() {
         </div>
       )}
 
-      {/* Background logo */}
       <div className="background-logo"></div>
 
       <Routes>

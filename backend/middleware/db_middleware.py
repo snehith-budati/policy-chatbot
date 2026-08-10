@@ -5,28 +5,29 @@ import psycopg2
 from core.db import get_db, get_ist_now
 from services.rag_service import create_embedding
 
-def save_policy_with_chunks(filename, filepath, pages_count, chunks, uploaded_by, policy_type="General"):
+def save_policy_with_chunks(filename, filepath, pages_count, chunks, uploaded_by, policy_type="General", category_name=None, version_name="v1.0"):
     """Middleware: Handles saving policy record and chunk embeddings into PostgreSQL database"""
     conn = get_db()
     
-    # Remove existing policy with same name if exists
+    cat_name = category_name.strip() if (category_name and category_name.strip()) else (policy_type.strip() if policy_type else "General")
+    ver_name = version_name.strip() if (version_name and version_name.strip()) else "v1.0"
+    
     existing = conn.execute('SELECT id FROM policies WHERE name = %s', (filename,)).fetchone()
     if existing:
         conn.execute('DELETE FROM embeddings WHERE policy_id = %s', (existing['id'],))
         conn.execute('DELETE FROM policies WHERE id = %s', (existing['id'],))
         conn.commit()
     
-    # Insert new policy record
     cursor = conn.execute(
         '''INSERT INTO policies 
-           (name, file_path, pages, chunks, uploaded_by, uploaded_at, policy_type) 
-           VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING id''',
-        (filename, filepath, pages_count, len(chunks), uploaded_by, get_ist_now().isoformat(), policy_type)
+           (name, file_path, pages, chunks, uploaded_by, uploaded_at, policy_type, category_name, version_name) 
+           VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id''',
+        (filename, filepath, pages_count, len(chunks), uploaded_by, get_ist_now().isoformat(), cat_name, cat_name, ver_name)
     )
     policy_id = cursor.fetchone()['id']
     
-    # Insert chunk embeddings
     successful_chunks = 0
+    generated_embeddings = []
     for chunk in chunks:
         try:
             embedding = create_embedding(chunk['text'])
@@ -37,18 +38,30 @@ def save_policy_with_chunks(filename, filepath, pages_count, chunks, uploaded_by
                 (policy_id, chunk['chunk_index'], chunk['text'], psycopg2.Binary(embedding), 
                  chunk['page'], chunk['section'], chunk.get('is_header', False))
             )
+            generated_embeddings.append(embedding)
             successful_chunks += 1
         except Exception as e:
             print(f"❌ Error embedding chunk {chunk.get('chunk_index')}: {e}")
             
     conn.commit()
+
+    # Index into physically isolated Policy ChromaDB instance (Workflow 2)
+    try:
+        from services.chroma_service import policy_chroma
+        policy_chroma.add_policy_chunks(policy_id, filename, chunks[:len(generated_embeddings)], generated_embeddings)
+    except Exception as e:
+        print(f"⚠️ ChromaDB Policy indexing error: {e}")
+
     return policy_id, successful_chunks
 
 def fetch_all_policies():
     """Middleware: Retrieve all policy records ordered by uploaded_at DESC"""
     db = get_db()
     return db.execute('''
-        SELECT name, pages, chunks, uploaded_by, uploaded_at, policy_type 
+        SELECT id, name, pages, chunks, uploaded_by, uploaded_at, 
+               COALESCE(category_name, policy_type, 'General') as category_name,
+               COALESCE(policy_type, category_name, 'General') as policy_type,
+               COALESCE(version_name, 'v1.0') as version_name 
         FROM policies 
         ORDER BY uploaded_at DESC
     ''').fetchall()
@@ -66,6 +79,11 @@ def delete_policy_record(pdf_name):
         db.execute('DELETE FROM embeddings WHERE policy_id = %s', (policy['id'],))
         db.execute('DELETE FROM policies WHERE id = %s', (policy['id'],))
         db.commit()
+        try:
+            from services.chroma_service import policy_chroma
+            policy_chroma.delete_policy_chunks(pdf_name)
+        except Exception as e:
+            print(f"⚠️ Error deleting chunks from ChromaDB: {e}")
         return True
     return False
 
@@ -156,7 +174,10 @@ def fetch_admin_dashboard_stats(admin_emails):
     placeholders = ', '.join(['%s'] * len(admin_emails))
     
     recent_uploads = db.execute('''
-        SELECT name, pages, chunks, uploaded_by, uploaded_at, policy_type 
+        SELECT name, pages, chunks, uploaded_by, uploaded_at, 
+               COALESCE(category_name, policy_type, 'General') as category_name,
+               COALESCE(policy_type, category_name, 'General') as policy_type,
+               COALESCE(version_name, 'v1.0') as version_name 
         FROM policies 
         ORDER BY uploaded_at DESC 
         LIMIT 5

@@ -1,4 +1,3 @@
-// #Updated on 5th March - Fixed ESLint warning
 import React, { useState, useEffect } from 'react';
 import './PolicyPdfPopup.css';
 
@@ -18,19 +17,15 @@ const PolicyPdfPopup = ({ policy, onClose, loading, error }) => {
             setLocalError(null);
 
             try {
-                // Get authentication from session storage
                 const username = sessionStorage.getItem('adminUsername') || 'capstoneb2';
                 const password = sessionStorage.getItem('adminPassword') || '1234';
                 
-                // Create Basic Auth token
                 const token = btoa(`${username}:${password}`);
                 
-                // Construct PDF URL
                 const pdfUrl = `${process.env.REACT_APP_API_URL || `${process.env.REACT_APP_API_URL || "http://localhost:5001"}`}/serve-pdf/${encodeURIComponent(policy.name)}`;
                 
                 console.log("Fetching PDF from:", pdfUrl);
                 
-                // Fetch PDF with authentication headers
                 const response = await fetch(pdfUrl, {
                     method: 'GET',
                     headers: {
@@ -49,14 +44,12 @@ const PolicyPdfPopup = ({ policy, onClose, loading, error }) => {
                     }
                 }
 
-                // Get PDF as blob
                 const blob = await response.blob();
                 
                 if (blob.size === 0) {
                     throw new Error('PDF file is empty');
                 }
 
-                // Create local blob URL
                 const url = URL.createObjectURL(blob);
                 setPdfBlobUrl(url);
                 console.log("PDF loaded successfully, size:", blob.size, "bytes");
@@ -71,16 +64,13 @@ const PolicyPdfPopup = ({ policy, onClose, loading, error }) => {
 
         fetchPdf();
 
-        // Cleanup function
         return () => {
             if (pdfBlobUrl) {
                 URL.revokeObjectURL(pdfBlobUrl);
             }
         };
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [policy?.name]); // Only depend on policy.name, not pdfBlobUrl
+    }, [policy?.name]);
 
-    // Handle retry
     const handleRetry = () => {
         setPdfBlobUrl(null);
         setLocalError(null);
@@ -137,8 +127,6 @@ const PolicyPdfPopup = ({ policy, onClose, loading, error }) => {
                         />
                     )}
                 </div>
-                
-                {/* Footer removed as requested */}
             </div>
         </div>
     );

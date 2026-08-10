@@ -5,7 +5,6 @@ import tempfile
 import time
 import PyPDF2
 
-# pdf2image check
 try:
     from pdf2image import convert_from_path, convert_from_bytes
     PDF2IMAGE_AVAILABLE = True
@@ -13,7 +12,6 @@ except ImportError:
     PDF2IMAGE_AVAILABLE = False
     print("⚠️ pdf2image not installed. Install with: pip install pdf2image")
 
-# Tesseract check
 try:
     import pytesseract
     from PIL import Image, ImageEnhance, ImageFilter
@@ -22,7 +20,6 @@ except ImportError:
     TESSERACT_AVAILABLE = False
     print("⚠️ Tesseract not fully available")
 
-# EasyOCR check
 try:
     import easyocr
     EASYOCR_AVAILABLE = True
@@ -32,7 +29,6 @@ except ImportError:
     easyocr_reader = None
     print("⚠️ EasyOCR not installed. Optional: pip install easyocr")
 
-# MLX-VLM check (GLM-OCR)
 try:
     from mlx_vlm import load, generate
     from mlx_vlm.prompt_utils import apply_chat_template
@@ -53,7 +49,6 @@ GLM_OCR_MODEL_PATH = os.path.join(
 )
 
 def get_glm_ocr():
-    """Lazy load GLM-OCR instance"""
     global _glm_ocr_model, _glm_ocr_processor, _glm_ocr_config
     
     if _glm_ocr_model is None and MLX_AVAILABLE:
@@ -79,7 +74,6 @@ def clean_extracted_text(text):
     return text.strip()
 
 def convert_pdf_to_images(pdf_source, dpi=200):
-    """Convert PDF to PIL images from in-memory byte stream OR file path"""
     if not PDF2IMAGE_AVAILABLE:
         print("⚠️ pdf2image not available")
         return []
@@ -102,7 +96,6 @@ def extract_text_with_glmocr_from_image(image, task="Text Recognition:"):
         return ""
     
     try:
-        # If image is a PIL Image instance, save to temp file for GLM-OCR
         if not isinstance(image, str):
             with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
                 image.save(tmp.name)
@@ -149,7 +142,6 @@ def extract_text_with_glmocr_from_image(image, task="Text Recognition:"):
         return ""
 
 def extract_text_with_glmocr(pdf_source):
-    """Extract text using GLM-OCR from in-memory stream or file path"""
     print(f"\n  🚀 GLM-OCR: Processing pages...")
     start_time = time.time()
     
@@ -177,14 +169,11 @@ def extract_text_with_glmocr(pdf_source):
     return text_by_page
 
 def extract_text_hybrid(pdf_source):
-    """Hybrid approach accepting RAM stream bytes OR file path string"""
-    # Step 1: Try GLM-OCR
     if MLX_AVAILABLE and os.path.exists(GLM_OCR_MODEL_PATH):
         text_by_page = extract_text_with_glmocr(pdf_source)
         if text_by_page:
             return text_by_page
     
-    # Step 2: Fallback to PyPDF2 from RAM memory stream or disk
     print(f"\n  📖 Fallback: Trying PyPDF2 extraction...")
     text_by_page = []
     try:
@@ -214,7 +203,6 @@ def extract_text_hybrid(pdf_source):
     except Exception as e:
         print(f"  ⚠️ PyPDF2 extraction failed: {e}")
     
-    # Step 3: Last resort - EasyOCR + Tesseract from PIL images
     print(f"\n  📸 Last resort: Trying EasyOCR/Tesseract...")
     images = convert_pdf_to_images(pdf_source, dpi=200)
     if not images:

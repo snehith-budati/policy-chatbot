@@ -2,12 +2,12 @@ import React, { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import "./Admin.css";
-// #Added on 4th March - Import DocumentCompareView component
+
 import DocumentCompareView from "../components/DocumentCompareView";
-// Policy diff comparison with bounding boxes
+
 import PolicyDiffCompare from "../components/PolicyDiffCompare";
 
-// IST Formatter Utility
+
 const formatIST = (dateString) => {
   if (!dateString) return "N/A";
   const date = new Date(dateString);
@@ -31,7 +31,7 @@ function Admin() {
   const [otpRequired, setOtpRequired] = useState(false);
   const [sendingOtp, setSendingOtp] = useState(false);
 
-  // Dashboard data
+
   const [stats, setStats] = useState(null);
   const [policies, setPolicies] = useState([]);
   const [users, setUsers] = useState([]);
@@ -39,18 +39,20 @@ function Admin() {
   const [adminLogs, setAdminLogs] = useState([]);
   const [feedback, setFeedback] = useState([]);
 
-  // #Added on 4th March - State for document comparison (Task 3)
+
   const [compareDocument, setCompareDocument] = useState(null);
   const [showCompareView, setShowCompareView] = useState(false);
-  // Policy diff comparison with bounding boxes
+
   const [showDiffCompare, setShowDiffCompare] = useState(false);
 
-  // UI state
+
   const [activeTab, setActiveTab] = useState("dashboard");
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState([]);
   const [selectedCategory, setSelectedCategory] = useState("General");
+  const [customCategory, setCustomCategory] = useState("");
+  const [selectedVersion, setSelectedVersion] = useState("v1.0");
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedUser, setSelectedUser] = useState(null);
   const [userChats, setUserChats] = useState([]);
@@ -58,7 +60,7 @@ function Admin() {
   const [modelMetrics, setModelMetrics] = useState(null);
   const [userToDelete, setUserToDelete] = useState(null);
 
-  // Check if already authenticated
+
   useEffect(() => {
     const auth = sessionStorage.getItem("adminAuth");
     const storedUser = sessionStorage.getItem("adminUsername");
@@ -70,33 +72,33 @@ function Admin() {
     }
   }, []);
 
-  // Fetch dashboard data when authenticated
+
   useEffect(() => {
     if (isAuthenticated) {
       fetchDashboardData();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+
   }, [isAuthenticated]);
 
-  // Define handleLogout first so it can be used in dependencies below
-  const handleLogout = useCallback(() => {
-    // 1. Wipe all sensitive storage first
-    sessionStorage.clear();
-    localStorage.clear(); // Just in case any other part of the app uses it
 
-    // 2. Reset all core state
+  const handleLogout = useCallback(() => {
+
+    sessionStorage.clear();
+    localStorage.clear(); 
+
+
     setCredentials({ username: "", password: "" });
     setOtp("");
     setOtpRequired(false);
     setIsAuthenticated(false);
 
-    // 3. Force a hard navigation to the clean URL to blast history and cached form data
+
     window.location.href = '/admin';
   }, []);
 
-  // ============= REORDERED FUNCTIONS - fetchAnalytics FIRST =============
 
-  // Define fetchAnalytics first (before it's used)
+
+
   const fetchAnalytics = useCallback(async () => {
     try {
       const username = credentials.username || sessionStorage.getItem('adminUsername');
@@ -181,7 +183,7 @@ function Admin() {
     }
   }, [credentials.username, otp]);
 
-  // Now fetchDashboardData can safely use fetchAnalytics
+
   const fetchDashboardData = useCallback(async () => {
     setLoading(true);
     try {
@@ -202,7 +204,7 @@ function Admin() {
     setLoading(false);
   }, [fetchStats, fetchPolicies, fetchUsers, fetchChats, fetchAnalytics, fetchModelMetrics, handleLogout]);
 
-  // ============= REST OF YOUR FUNCTIONS (no changes) =============
+
 
   const fetchUserChats = async (email) => {
     try {
@@ -219,7 +221,7 @@ function Admin() {
     }
   };
 
-  // #Added on 4th March - Handle document comparison (Task 3)
+
   const handleCompareDocument = async (pdfName) => {
     try {
       setLoading(true);
@@ -240,7 +242,7 @@ function Admin() {
     }
   };
 
-  // #Added on 4th March - Close comparison view
+
   const handleCloseCompare = () => {
     setShowCompareView(false);
     setCompareDocument(null);
@@ -258,9 +260,9 @@ function Admin() {
         }
       });
 
-      // #Added on 4th March - Store credentials for PDF viewing and session persistence
+
       sessionStorage.setItem("adminUsername", credentials.username);
-      // Store the OTP as the session password because the backend expects it in Basic Auth
+
       sessionStorage.setItem("adminPassword", otp);
 
       setIsAuthenticated(true);
@@ -284,7 +286,7 @@ function Admin() {
         email: credentials.username,
         password: credentials.password
       });
-      setOtp(""); // Ensure OTP field starts empty
+      setOtp(""); 
       setOtpRequired(true);
     } catch (error) {
       setAuthError(error.response?.data?.error || "Failed to send OTP");
@@ -317,7 +319,12 @@ function Admin() {
     selectedFiles.forEach(file => {
       formData.append("file", file);
     });
-    formData.append("policy_type", selectedCategory);
+    const finalCategory = selectedCategory === "Custom" ? (customCategory.strip ? customCategory.trim() : customCategory) || "General" : selectedCategory;
+    const finalVersion = (selectedVersion && selectedVersion.trim()) ? selectedVersion.trim() : "v1.0";
+
+    formData.append("category_name", finalCategory);
+    formData.append("policy_type", finalCategory);
+    formData.append("version_name", finalVersion);
 
     try {
       const username = credentials.username || "capstoneb2";
@@ -409,7 +416,7 @@ function Admin() {
     }
   };
 
-  // Filter functions - USED in JSX below
+
   const filteredPolicies = policies.filter(p =>
     p.name?.toLowerCase().includes(searchTerm.toLowerCase())
   );
@@ -423,14 +430,14 @@ function Admin() {
     u.email?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  // ============= REST OF YOUR JSX (no changes below this line) =============
 
-  // If not authenticated, show login form
+
+
   if (!isAuthenticated) {
     return (
       <div className="admin-login-container">
         <div className="admin-login-card">
-          {/* Left branding panel */}
+
           <div className="admin-login-branding">
             <img
               src="/plogo.png"
@@ -442,7 +449,7 @@ function Admin() {
             <p>Authorized personnel only. Manage policies, users, and system settings.</p>
           </div>
 
-          {/* Right form panel */}
+
           <div className="admin-login-form-panel">
             <div className="login-header" style={{ width: '100%', maxWidth: '360px', textAlign: 'center' }}>
               <h1 style={{ fontSize: '22px', fontWeight: '600', marginBottom: '6px', color: '#0f172a' }}>Admin Access</h1>
@@ -539,10 +546,10 @@ function Admin() {
     );
   }
 
-  // Main Admin Dashboard
+
   return (
     <div className="admin-container">
-      {/* Document Comparison Modal */}
+
       {showCompareView && compareDocument && (
         <DocumentCompareView
           document={compareDocument}
@@ -550,7 +557,7 @@ function Admin() {
         />
       )}
 
-      {/* Policy Diff Comparison Modal */}
+
       {showDiffCompare && (
         <PolicyDiffCompare
           policies={policies}
@@ -559,7 +566,7 @@ function Admin() {
         />
       )}
 
-      {/* CUSTOM DELETE CONFIRMATION MODAL */}
+
       {userToDelete && (
         <>
           <div className="modal-overlay" onClick={() => setUserToDelete(null)}></div>
@@ -580,10 +587,10 @@ function Admin() {
         </>
       )}
 
-      {/* Card Wrapper — like chat-container in ChatApp */}
+
       <div className="admin-card">
 
-        {/* Sidebar */}
+
         <div className="admin-sidebar page-entrance">
           <div className="sidebar-header">
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -618,7 +625,7 @@ function Admin() {
           </div>
         </div>
 
-        {/* Main Content */}
+
         <div className="admin-main">
           <div className="main-header">
             <h1>
@@ -668,10 +675,10 @@ function Admin() {
               </div>
             )}
 
-            {/* DASHBOARD TAB */}
+
             {activeTab === "dashboard" && stats && (
               <div className="dashboard-grid">
-                {/* Stats cards */}
+
                 <div className="stats-grid">
                   <div className="stat-card"><div className="stat-icon">📄</div><div className="stat-details"><h3>{stats.total_policies || 0}</h3><p>Total Policies</p></div></div>
                   <div className="stat-card"><div className="stat-icon">👥</div><div className="stat-details"><h3>{stats.total_users || 0}</h3><p>Active Users</p></div></div>
@@ -679,7 +686,7 @@ function Admin() {
                   <div className="stat-card"><div className="stat-icon">🔍</div><div className="stat-details"><h3>{stats.total_vectors || 0}</h3><p>Vector Embeddings</p></div></div>
                 </div>
 
-                {/* Recent Uploads */}
+
                 <div className="dashboard-section">
                   <div className="section-header"><h2>Recent Uploads</h2><button className="view-all-btn" onClick={() => setActiveTab("policies")}>View All</button></div>
                   <div className="recent-list">
@@ -696,7 +703,7 @@ function Admin() {
                   </div>
                 </div>
 
-                {/* Most Active Users */}
+
                 <div className="dashboard-section">
                   <div className="section-header"><h2>Most Active Users</h2><button className="view-all-btn" onClick={() => setActiveTab("users")}>View All</button></div>
                   <div className="user-list">
@@ -713,7 +720,7 @@ function Admin() {
                   </div>
                 </div>
 
-                {/* Recent Conversations */}
+
                 <div className="dashboard-section full-width">
                   <div className="section-header"><h2>Recent Conversations</h2><button className="view-all-btn" onClick={() => setActiveTab("chats")}>View All</button></div>
                   <div className="chats-table">
@@ -736,11 +743,11 @@ function Admin() {
               </div>
             )}
 
-            {/* EVALUATION MATRIX TAB */}
+
             {activeTab === "evaluation" && (
               <div className="evaluation-tab">
 
-                {/* ── OVERALL AVERAGES BANNER ── */}
+
                 {modelMetrics?.overall && (() => {
                   const ov = modelMetrics.overall;
                   return (
@@ -777,7 +784,7 @@ function Admin() {
                   );
                 })()}
 
-                {/* ── PER-MODEL CARDS ── */}
+
                 {modelMetrics?.models && modelMetrics.models.length > 0 && (() => {
                   const totalQ = modelMetrics.models.reduce((s, m) => s + m.total_queries, 0) || 1;
                   const MODEL_META = {
@@ -803,7 +810,7 @@ function Admin() {
                               </div>
 
                               <div className="emc-metrics">
-                                {/* Query Share */}
+
                                 <div className="emc-metric">
                                   <div className="emc-metric-label">Query Share</div>
                                   <div className="emc-gauge-wrap">
@@ -814,7 +821,7 @@ function Admin() {
                                   </div>
                                 </div>
 
-                                {/* Avg Confidence */}
+
                                 <div className="emc-metric">
                                   <div className="emc-metric-label">Retrieval Confidence</div>
                                   <div className="emc-gauge-wrap">
@@ -825,7 +832,7 @@ function Admin() {
                                   </div>
                                 </div>
 
-                                {/* Satisfaction */}
+
                                 <div className="emc-metric">
                                   <div className="emc-metric-label">Satisfaction Rate</div>
                                   <div className="emc-gauge-wrap">
@@ -839,7 +846,7 @@ function Admin() {
                                   </div>
                                 </div>
 
-                                {/* Avg Latency */}
+
                                 <div className="emc-metric">
                                   <div className="emc-metric-label">Avg Response Time</div>
                                   <div className="emc-latency-pill" style={{ borderColor: meta.color, color: meta.color }}>
@@ -855,7 +862,7 @@ function Admin() {
                   );
                 })()}
 
-                {/* No data state */}
+
                 {(!modelMetrics || modelMetrics.models?.length === 0) && (
                   <div style={{ textAlign: 'center', padding: '60px 20px', color: '#94a3b8' }}>
                     <div style={{ fontSize: '3rem', marginBottom: '12px' }}>📭</div>
@@ -863,7 +870,7 @@ function Admin() {
                   </div>
                 )}
 
-                {/* ── RETRIEVAL SPREAD + QA PARAMS (existing, kept below) ── */}
+
                 {analytics?.evaluation_matrix && (
                   <div className="eval-row" style={{ marginTop: '32px' }}>
                     <div className="eval-section glass-card">
@@ -921,7 +928,7 @@ function Admin() {
               </div>
             )}
 
-            {/* POLICIES TAB - WITH COMPARE BUTTON (Task 3) */}
+
             {activeTab === "policies" && (
               <div className="policies-tab">
                 <div className="upload-section">
@@ -933,20 +940,44 @@ function Admin() {
                       <span className="upload-text">{selectedFiles.length > 0 ? `${selectedFiles.length} files selected` : "Choose PDF files or drag here"}</span>
                     </label>
 
-                    <div className="category-select-group" style={{ marginTop: "12px", display: "flex", alignItems: "center", gap: "10px" }}>
-                      <label style={{ fontWeight: "600", fontSize: "14px" }}>Document Category:</label>
-                      <select 
-                        value={selectedCategory} 
-                        onChange={(e) => setSelectedCategory(e.target.value)}
-                        style={{ padding: "6px 12px", borderRadius: "6px", border: "1px solid #ccc", background: "#fff", cursor: "pointer" }}
-                      >
-                        <option value="General">General</option>
-                        <option value="Academic Policy">Academic Policy</option>
-                        <option value="HR Policy">HR Policy</option>
-                        <option value="IT & Security Policy">IT & Security Policy</option>
-                        <option value="Student Code of Conduct">Student Code of Conduct</option>
-                        <option value="Internship Policy">Internship Policy</option>
-                      </select>
+                    <div className="category-select-group" style={{ marginTop: "14px", display: "flex", flexWrap: "wrap", alignItems: "center", gap: "12px" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                        <label style={{ fontWeight: "600", fontSize: "14px", color: "#334155" }}>Category Name:</label>
+                        <select 
+                          value={selectedCategory} 
+                          onChange={(e) => setSelectedCategory(e.target.value)}
+                          style={{ padding: "6px 12px", borderRadius: "6px", border: "1px solid #cbd5e1", background: "#fff", cursor: "pointer", fontSize: "14px" }}
+                        >
+                          <option value="General">General</option>
+                          <option value="Academic Policy">Academic Policy</option>
+                          <option value="HR Policy">HR Policy</option>
+                          <option value="IT & Security Policy">IT & Security Policy</option>
+                          <option value="Student Code of Conduct">Student Code of Conduct</option>
+                          <option value="Internship Policy">Internship Policy</option>
+                          <option value="Custom">Custom Category...</option>
+                        </select>
+                      </div>
+
+                      {selectedCategory === "Custom" && (
+                        <input
+                          type="text"
+                          placeholder="Enter custom category..."
+                          value={customCategory}
+                          onChange={(e) => setCustomCategory(e.target.value)}
+                          style={{ padding: "6px 12px", borderRadius: "6px", border: "1px solid #cbd5e1", fontSize: "14px", width: "200px" }}
+                        />
+                      )}
+
+                      <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                        <label style={{ fontWeight: "600", fontSize: "14px", color: "#334155" }}>Version Name:</label>
+                        <input
+                          type="text"
+                          placeholder="e.g. v1.0, v2.0, 2024"
+                          value={selectedVersion}
+                          onChange={(e) => setSelectedVersion(e.target.value)}
+                          style={{ padding: "6px 12px", borderRadius: "6px", border: "1px solid #cbd5e1", fontSize: "14px", width: "130px" }}
+                        />
+                      </div>
                     </div>
 
                     {selectedFiles.length > 0 && (
@@ -969,10 +1000,18 @@ function Admin() {
                         <div className="policy-icon">📄</div>
                         <div className="policy-info">
                           <h3 className="policy-name">{policy.name}</h3>
+                          <div className="policy-badges" style={{ display: "flex", gap: "6px", margin: "4px 0", flexWrap: "wrap" }}>
+                            <span className="policy-badge category-tag" style={{ background: "#e0f2fe", color: "#0369a1", padding: "2px 8px", borderRadius: "4px", fontSize: "12px", fontWeight: "600" }}>
+                              📁 {policy.category_name || policy.policy_type || "General"}
+                            </span>
+                            <span className="policy-badge version-tag" style={{ background: "#fef3c7", color: "#b45309", padding: "2px 8px", borderRadius: "4px", fontSize: "12px", fontWeight: "600" }}>
+                              🏷️ {policy.version_name || "v1.0"}
+                            </span>
+                          </div>
                           <div className="policy-meta"><span>{policy.pages} pages</span><span>{policy.chunks} chunks</span></div>
                           <div className="policy-meta"><span>Uploaded: {formatIST(policy.uploaded_at)}</span></div>
                           <div className="policy-actions">
-                            {/* #Added on 4th March - Compare button (Task 3) */}
+
                             <button
                               type="button"
                               className="compare-btn"
@@ -997,7 +1036,7 @@ function Admin() {
               </div>
             )}
 
-            {/* USERS TAB */}
+
             {activeTab === "users" && (
               <div className="users-tab">
                 <div className="users-header"><h2>Registered Users ({filteredUsers.length})</h2></div>
@@ -1043,7 +1082,7 @@ function Admin() {
                   ))}
                 </div>
 
-                {/* User Chats Modal */}
+
                 {selectedUser && (
                   <div className="user-chats-modal">
                     <div className="modal-header">
@@ -1068,7 +1107,7 @@ function Admin() {
               </div>
             )}
 
-            {/* CHATS TAB */}
+
             {activeTab === "chats" && (
               <div className="chats-tab">
                 <div className="chats-header"><h2>All Conversations ({filteredChats.length})</h2></div>
@@ -1095,7 +1134,7 @@ function Admin() {
               </div>
             )}
 
-            {/* LOGS TAB */}
+
             {activeTab === "logs" && (
               <div className="logs-tab">
                 <div className="logs-header">
@@ -1120,7 +1159,7 @@ function Admin() {
               </div>
             )}
 
-            {/* INSIGHTS TAB */}
+
             {activeTab === "insights" && analytics && (
               <div className="insights-tab">
                 <div className="insights-grid">
@@ -1210,7 +1249,7 @@ function Admin() {
               </div>
             )}
 
-            {/* FEEDBACK TAB */}
+
             {activeTab === "feedback" && (
               <div className="feedback-tab">
                 <div className="section-header"><h2>User Rating Feedback</h2></div>
@@ -1233,7 +1272,7 @@ function Admin() {
               </div>
             )}
 
-            {/* POLICY DIFF COMPARE TAB */}
+
             {activeTab === "diffcompare" && (
               <div className="diffcompare-tab" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-start', gap: '24px', padding: '10px 24px 40px' }}>
                 <div style={{ textAlign: 'center' }}>
@@ -1285,7 +1324,7 @@ function Admin() {
         </div>
       </div>
 
-      {/* ⭐ RATING WIDGET - REMOVED (as requested) */}
+
     </div>
   );
 }

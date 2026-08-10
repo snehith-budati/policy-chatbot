@@ -1,4 +1,3 @@
-// #Updated on 4th March - Fixed authentication and ESLint warning
 import React, { useState, useEffect } from 'react';
 import './DocumentCompareView.css';
 
@@ -7,27 +6,23 @@ const DocumentCompareView = ({ document, onClose }) => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
 
-    // Fetch PDF with proper authentication headers
     useEffect(() => {
-        // Don't run if no document
         if (!document?.pdf_url) {
             setError("No PDF URL provided");
             setLoading(false);
             return;
         }
 
-        let isMounted = true; // Track if component is mounted
+        let isMounted = true;
         let blobUrl = null;
 
         const fetchPdf = async () => {
             setLoading(true);
             setError(null);
 
-            // Get credentials from session storage
             const username = sessionStorage.getItem('adminUsername') || 'capstoneb2';
             const password = sessionStorage.getItem('adminPassword') || '1234';
             
-            // Create Basic Auth token
             const token = btoa(`${username}:${password}`);
 
             console.log("Fetching PDF from:", document.pdf_url);
@@ -51,17 +46,14 @@ const DocumentCompareView = ({ document, onClose }) => {
                     }
                 }
 
-                // Get PDF as blob
                 const blob = await response.blob();
                 
                 if (blob.size === 0) {
                     throw new Error('PDF file is empty');
                 }
 
-                // Create local blob URL
                 blobUrl = URL.createObjectURL(blob);
                 
-                // Only update state if component is still mounted
                 if (isMounted) {
                     setPdfBlobUrl(blobUrl);
                     console.log("PDF loaded successfully, size:", blob.size, "bytes");
@@ -81,9 +73,8 @@ const DocumentCompareView = ({ document, onClose }) => {
 
         fetchPdf();
 
-        // Cleanup function
         return () => {
-            isMounted = false; // Prevent state updates on unmounted component
+            isMounted = false;
             if (blobUrl) {
                 URL.revokeObjectURL(blobUrl);
             }
@@ -91,15 +82,12 @@ const DocumentCompareView = ({ document, onClose }) => {
                 URL.revokeObjectURL(pdfBlobUrl);
             }
         };
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [document?.pdf_url]); // Only depend on the URL, not on pdfBlobUrl
+    }, [document?.pdf_url]);
 
-    // Retry loading PDF
     const handleRetry = () => {
         setPdfBlobUrl(null);
         setError(null);
         setLoading(true);
-        // The useEffect will trigger again automatically
     };
 
     return (
@@ -118,7 +106,6 @@ const DocumentCompareView = ({ document, onClose }) => {
                 </div>
                 
                 <div className="compare-panels">
-                    {/* Left Panel - Original PDF */}
                     <div className="compare-panel left-panel">
                         <div className="panel-header">
                             <h3>Original PDF</h3>
@@ -164,7 +151,6 @@ const DocumentCompareView = ({ document, onClose }) => {
                         </div>
                     </div>
                     
-                    {/* Right Panel - Extracted Text */}
                     <div className="compare-panel right-panel">
                         <div className="panel-header">
                             <h3>Extracted Text</h3>

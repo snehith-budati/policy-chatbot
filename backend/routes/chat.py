@@ -23,7 +23,6 @@ chat_bp = Blueprint('chat', __name__)
 
 @chat_bp.route("/chat", methods=["POST"])
 def chat():
-    """Enhanced chat that uses ONLY the most relevant document"""
     try:
         chat_process_start = time.time()
         data = request.json
@@ -54,7 +53,6 @@ def chat():
         
         question_lower = question.lower().strip()
 
-        # Step 0: SCOPE GUARD
         greetings = ["hi", "hello", "hey", "good morning", "good afternoon", "good evening", "how are you", "who are you"]
         is_greeting = any(question_lower == g or question_lower.startswith(g + " ") for g in greetings)
         
@@ -133,7 +131,6 @@ def chat():
             })
 
         else:
-            # Step 1: Semantic Cache Check
             question_embedding_bytes = create_embedding(question)
             cached_answer, cached_sources = check_semantic_cache(question_embedding_bytes)
             
@@ -147,7 +144,6 @@ def chat():
                     "cached": True
                 })
 
-            # Step 2: Full RAG Pipeline
             min_relevance_score = 0.22
             results = semantic_search(question, n_results=50, min_score=min_relevance_score, query_embedding=question_embedding_bytes)
             
@@ -159,7 +155,16 @@ def chat():
                     "chat_id": 0
                 })
 
-            # Group results by PDF
+            all_policies = fetch_all_policies()
+            policy_map = { p['name']: dict(p) for p in all_policies }
+            
+            category_latest = {}
+            for p in all_policies:
+                cat = p.get('category_name') or p.get('policy_type') or 'General'
+                up_time = str(p.get('uploaded_at') or '')
+                if cat not in category_latest or up_time > category_latest[cat]['uploaded_at']:
+                    category_latest[cat] = {'name': p['name'], 'uploaded_at': up_time}
+
             pdf_scores = {}
             pdf_counts = {}
             pdf_total_score = {}
@@ -187,16 +192,25 @@ def chat():
             best_pdf_avg = 0.0
             best_pdf_count = 0
             
-            print(f"\n📊 PDF STATISTICS:")
+            print(f"\n📊 PDF STATISTICS (with Recency Priority Boost):")
             for pdf in pdf_counts:
                 count = pdf_counts[pdf]
                 total = pdf_total_score[pdf]
                 best = pdf_best_score[pdf]
                 avg_score = total / count if count > 0 else 0.0
-                print(f"   • {pdf}: Chunks={count}, Avg={avg_score:.3f}, Best={best:.3f}")
                 
                 count_factor = min(count / 10.0, 1.0) * 0.2
-                combined_score = (avg_score * 0.4) + (best * 0.4) + count_factor
+                base_combined_score = (avg_score * 0.4) + (best * 0.4) + count_factor
+                
+                recency_boost = 0.0
+                pmeta = policy_map.get(pdf)
+                if pmeta:
+                    cat = pmeta.get('category_name') or pmeta.get('policy_type') or 'General'
+                    if category_latest.get(cat) and category_latest[cat]['name'] == pdf:
+                        recency_boost = 0.15
+
+                combined_score = base_combined_score + recency_boost
+                print(f"   • {pdf}: Chunks={count}, Avg={avg_score:.3f}, Best={best:.3f}, RecencyBoost={recency_boost:.2f}, Final={combined_score:.3f}")
                 
                 if combined_score > best_pdf_score:
                     best_pdf_score = combined_score
@@ -370,7 +384,6 @@ def chat():
 
 @chat_bp.route("/chat/<int:chat_id>/satisfaction", methods=["POST"])
 def update_satisfaction(chat_id):
-    """Update satisfaction for a specific chat message using middleware"""
     try:
         data = request.json
         satisfaction = data.get("satisfaction")
@@ -385,7 +398,6 @@ def update_satisfaction(chat_id):
 
 @chat_bp.route("/feedback", methods=["POST"])
 def submit_feedback():
-    """Submit general app feedback using middleware"""
     try:
         data = request.json
         user_email = data.get("user_email")
@@ -403,7 +415,6 @@ def submit_feedback():
 @chat_bp.route('/reset', methods=['POST'])
 @authenticate_admin
 def reset_database():
-    """Reset database using middleware"""
     reset_all_database_records()
     admin_user = request.authorization.username if request.authorization else "Admin"
     log_admin_action(admin_user, "RESET", "Database has been reset (policies, embeddings, chat history)")

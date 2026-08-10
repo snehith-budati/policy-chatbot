@@ -97,7 +97,6 @@ def migrate_data():
     except Exception as e:
         print(f"⚠️ Error migrating chat history: {e}")
 
-    # Reset Primary Key Sequences in PostgreSQL
     tables = ['policies', 'embeddings', 'users', 'chat_history', 'admin_logs', 'feedback_ratings', 'semantic_cache']
     for t in tables:
         try:

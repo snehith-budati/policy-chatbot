@@ -1,7 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import './PolicyDiffCompare.css';
 
-// ─── Diff helpers ─────────────────────────────────────────────────────────────
 function tokenize(text) {
   return text.split(/(\s+)/);
 }
@@ -39,7 +38,6 @@ function diffText(oldText, newText) {
   return computeDiff(oldTokens, newTokens);
 }
 
-// Build per-page diff
 function buildPageDiffs(oldChunks, newChunks) {
   const groupByPage = (arr) => {
     const map = {};
@@ -67,13 +65,11 @@ function buildPageDiffs(oldChunks, newChunks) {
   });
 }
 
-// ─── DiffTextPanel with ONE big bounding box SVG overlay ──────────────────────
 function DiffTextPanel({ diff, side, searchPage, isActive, showBbox }) {
   const containerRef = useRef(null);
-  const svgRef       = useRef(null);
-  const markRefs     = useRef([]);
+  const svgRef = useRef(null);
+  const markRefs = useRef([]);
 
-  // Scroll to first change when page becomes active
   useEffect(() => {
     if (isActive && containerRef.current) {
       const highlight = containerRef.current.querySelector('.diff-change');
@@ -81,10 +77,8 @@ function DiffTextPanel({ diff, side, searchPage, isActive, showBbox }) {
     }
   }, [isActive, searchPage]);
 
-  // Draw one tight bounding box per CLUSTER of nearby changed marks.
-  // Marks within GAP_PX of each other (vertically) belong to the same cluster.
   const drawClusters = useCallback(() => {
-    const svg       = svgRef.current;
+    const svg = svgRef.current;
     const container = containerRef.current;
     if (!svg || !container) return;
 
@@ -94,72 +88,64 @@ function DiffTextPanel({ diff, side, searchPage, isActive, showBbox }) {
     const marks = markRefs.current.filter(Boolean);
     if (marks.length === 0) return;
 
-    const cRect      = container.getBoundingClientRect();
-    const scrollTop  = container.scrollTop;
+    const cRect = container.getBoundingClientRect();
+    const scrollTop = container.scrollTop;
     const scrollLeft = container.scrollLeft;
 
-    // Map every mark to its scroll-relative rect
     const rects = marks.map(el => {
       const r = el.getBoundingClientRect();
       return {
-        top:    r.top    - cRect.top  + scrollTop,
-        left:   r.left   - cRect.left + scrollLeft,
-        bottom: r.bottom - cRect.top  + scrollTop,
-        right:  r.right  - cRect.left + scrollLeft,
+        top: r.top - cRect.top + scrollTop,
+        left: r.left - cRect.left + scrollLeft,
+        bottom: r.bottom - cRect.top + scrollTop,
+        right: r.right - cRect.left + scrollLeft,
       };
-    }).sort((a, b) => a.top - b.top); // sort top-to-bottom
+    }).sort((a, b) => a.top - b.top);
 
-    // Cluster: if gap between prev cluster bottom and this rect top < GAP_PX → same cluster
-    const GAP_PX = 48; // ~2 line-heights; tune this if needed
+    const GAP_PX = 48;
     const clusters = [];
     rects.forEach(r => {
       const last = clusters[clusters.length - 1];
       if (last && r.top - last.bottom < GAP_PX) {
-        // Extend existing cluster
-        last.left   = Math.min(last.left,   r.left);
-        last.right  = Math.max(last.right,  r.right);
+        last.left = Math.min(last.left, r.left);
+        last.right = Math.max(last.right, r.right);
         last.bottom = Math.max(last.bottom, r.bottom);
       } else {
-        // New cluster
         clusters.push({ top: r.top, left: r.left, bottom: r.bottom, right: r.right });
       }
     });
 
-    // Size SVG to full scroll content
     const inner = container.querySelector('.panel-scroll-inner') || container;
-    svg.setAttribute('width',  inner.scrollWidth  || cRect.width);
+    svg.setAttribute('width', inner.scrollWidth || cRect.width);
     svg.setAttribute('height', inner.scrollHeight || cRect.height);
 
-    const PAD       = 6;
-    const color     = side === 'old' ? '#ef4444' : '#22c55e';
+    const PAD = 6;
+    const color = side === 'old' ? '#ef4444' : '#22c55e';
     const fillColor = side === 'old' ? 'rgba(239,68,68,0.08)' : 'rgba(34,197,94,0.08)';
-    const label     = side === 'old' ? '− removed' : '+ added';
+    const label = side === 'old' ? '− removed' : '+ added';
 
     const drawRect = (svg, x, y, w, h, fill, stroke, dash) => {
       const el = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-      el.setAttribute('x', x);  el.setAttribute('y', y);
+      el.setAttribute('x', x); el.setAttribute('y', y);
       el.setAttribute('width', w); el.setAttribute('height', h);
       el.setAttribute('rx', '5'); el.setAttribute('ry', '5');
-      if (fill)   el.setAttribute('fill', fill);
+      if (fill) el.setAttribute('fill', fill);
       if (stroke) { el.setAttribute('fill', 'none'); el.setAttribute('stroke', stroke); el.setAttribute('stroke-width', '2'); el.setAttribute('stroke-dasharray', dash || '6,3'); }
       svg.appendChild(el);
     };
 
     clusters.forEach((cl, idx) => {
-      const x = cl.left   - PAD;
-      const y = cl.top    - PAD;
-      const w = (cl.right  - cl.left) + PAD * 2;
-      const h = (cl.bottom - cl.top)  + PAD * 2;
+      const x = cl.left - PAD;
+      const y = cl.top - PAD;
+      const w = (cl.right - cl.left) + PAD * 2;
+      const h = (cl.bottom - cl.top) + PAD * 2;
 
-      // Tinted fill
       drawRect(svg, x, y, w, h, fillColor, null, null);
-      // Dashed border
       drawRect(svg, x, y, w, h, null, color, '6,3');
 
-      // Label pill only on the first cluster
       if (idx === 0) {
         const labelY = Math.max(y - 2, 16);
-        const pillW  = label.length * 7 + 12;
+        const pillW = label.length * 7 + 12;
         const pill = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
         pill.setAttribute('x', x); pill.setAttribute('y', labelY - 14);
         pill.setAttribute('width', pillW); pill.setAttribute('height', 16);
@@ -176,24 +162,20 @@ function DiffTextPanel({ diff, side, searchPage, isActive, showBbox }) {
     });
   }, [side, showBbox]);
 
-  // Re-draw after marks are painted (small delay for layout)
   useEffect(() => {
     const id = setTimeout(drawClusters, 30);
     return () => clearTimeout(id);
   }, [diff, side, showBbox, searchPage, drawClusters]);
 
-  // Re-draw on scroll
   const onScroll = useCallback(() => {
     requestAnimationFrame(drawClusters);
   }, [drawClusters]);
 
-  // Reset change index and markRefs before each render
   let changeIdx = 0;
   markRefs.current = [];
 
   return (
     <div className="diff-text-body" ref={containerRef} onScroll={onScroll}>
-      {/* SVG overlay — pointer-events: none so text stays selectable */}
       <svg
         ref={svgRef}
         className="bbox-svg"
@@ -229,18 +211,72 @@ function DiffTextPanel({ diff, side, searchPage, isActive, showBbox }) {
   );
 }
 
-// ─── Main component ───────────────────────────────────────────────────────────
 const PolicyDiffCompare = ({ policies, credentials, onClose }) => {
-  const [oldPolicy, setOldPolicy]         = useState('');
-  const [newPolicy, setNewPolicy]         = useState('');
-  const [pageDiffs, setPageDiffs]         = useState([]);
-  const [activePage, setActivePage]       = useState(0);
-  const [loading, setLoading]             = useState(false);
-  const [error, setError]                 = useState('');
+  const [oldPolicy, setOldPolicy] = useState('');
+  const [newPolicy, setNewPolicy] = useState('');
+  const [selectedCategoryFilter, setSelectedCategoryFilter] = useState('');
+  const [pageDiffs, setPageDiffs] = useState([]);
+  const [activePage, setActivePage] = useState(0);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
   const [showBboxOverlay, setShowBboxOverlay] = useState(true);
   const [filterChanged, setFilterChanged] = useState(false);
-  const leftRef        = useRef(null);
-  const rightRef       = useRef(null);
+  const leftRef = useRef(null);
+  const rightRef = useRef(null);
+
+  const categories = Array.from(
+    new Set(policies.map(p => p.category_name || p.policy_type || 'General'))
+  ).sort();
+
+  const handleOldPolicyChange = (name) => {
+    setOldPolicy(name);
+    if (name) {
+      const selected = policies.find(p => p.name === name);
+      if (selected) {
+        const cat = selected.category_name || selected.policy_type || 'General';
+        setSelectedCategoryFilter(cat);
+        if (newPolicy) {
+          const newObj = policies.find(p => p.name === newPolicy);
+          const newCat = newObj ? (newObj.category_name || newObj.policy_type || 'General') : '';
+          if (newCat !== cat) setNewPolicy('');
+        }
+      }
+    }
+  };
+
+  const handleCategoryFilterChange = (cat) => {
+    setSelectedCategoryFilter(cat);
+    if (cat) {
+      if (oldPolicy) {
+        const oldObj = policies.find(p => p.name === oldPolicy);
+        const oldCat = oldObj ? (oldObj.category_name || oldObj.policy_type || 'General') : '';
+        if (oldCat !== cat) setOldPolicy('');
+      }
+      if (newPolicy) {
+        const newObj = policies.find(p => p.name === newPolicy);
+        const newCat = newObj ? (newObj.category_name || newObj.policy_type || 'General') : '';
+        if (newCat !== cat) setNewPolicy('');
+      }
+    }
+  };
+
+  const currentCategory = selectedCategoryFilter || (oldPolicy ? (policies.find(p => p.name === oldPolicy)?.category_name || policies.find(p => p.name === oldPolicy)?.policy_type || 'General') : '');
+
+  const oldPolicyOptions = selectedCategoryFilter
+    ? policies.filter(p => (p.category_name || p.policy_type || 'General') === selectedCategoryFilter)
+    : policies;
+
+  const newPolicyOptions = currentCategory
+    ? policies.filter(p => (p.category_name || p.policy_type || 'General') === currentCategory && p.name !== oldPolicy)
+    : policies.filter(p => p.name !== oldPolicy);
+
+  const categoryPolicies = currentCategory
+    ? policies.filter(p => (p.category_name || p.policy_type || 'General') === currentCategory)
+    : [];
+  const notEnoughVersions = currentCategory && categoryPolicies.length < 2;
+
+  const oldObj = policies.find(p => p.name === oldPolicy);
+  const newObj = policies.find(p => p.name === newPolicy);
 
   const fetchChunks = async (policyName) => {
     const username = credentials.username || sessionStorage.getItem('adminUsername');
@@ -256,7 +292,7 @@ const PolicyDiffCompare = ({ policies, credentials, onClose }) => {
 
   const handleCompare = async () => {
     if (!oldPolicy || !newPolicy) { setError('Please select both policies.'); return; }
-    if (oldPolicy === newPolicy)  { setError('Please select two different policies.'); return; }
+    if (oldPolicy === newPolicy) { setError('Please select two different policy versions.'); return; }
     setError('');
     setLoading(true);
     setPageDiffs([]);
@@ -287,14 +323,13 @@ const PolicyDiffCompare = ({ policies, credentials, onClose }) => {
   };
 
   const displayedPages = filterChanged ? pageDiffs.filter(p => p.hasDiff) : pageDiffs;
-  const current        = displayedPages[activePage];
-  const changedCount   = pageDiffs.filter(p => p.hasDiff).length;
+  const current = displayedPages[activePage];
+  const changedCount = pageDiffs.filter(p => p.hasDiff).length;
 
   return (
     <div className="pdiff-overlay">
       <div className="pdiff-container">
 
-        {/* ── Header ── */}
         <div className="pdiff-header">
           <div className="pdiff-header-left">
             <span className="pdiff-icon">🔀</span>
@@ -308,14 +343,39 @@ const PolicyDiffCompare = ({ policies, credentials, onClose }) => {
           <button className="pdiff-close" onClick={onClose} title="Close">✕</button>
         </div>
 
-        {/* ── Selector bar ── */}
+        <div className="pdiff-category-bar" style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 24px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0', fontSize: '13px' }}>
+          <span style={{ fontWeight: '600', color: '#475569' }}>📁 Policy Category:</span>
+          <select
+            value={selectedCategoryFilter}
+            onChange={e => handleCategoryFilterChange(e.target.value)}
+            style={{ padding: '6px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', background: '#fff', cursor: 'pointer', fontSize: '13px', fontWeight: '500' }}
+          >
+            <option value="">All Categories ({policies.length} documents)</option>
+            {categories.map(cat => {
+              const count = policies.filter(p => (p.category_name || p.policy_type || 'General') === cat).length;
+              return (
+                <option key={cat} value={cat}>
+                  {cat} ({count} document{count !== 1 ? 's' : ''})
+                </option>
+              );
+            })}
+          </select>
+          {currentCategory && (
+            <span style={{ color: '#0369a1', fontSize: '12px', background: '#e0f2fe', padding: '3px 10px', borderRadius: '12px', fontWeight: '500', marginLeft: 'auto' }}>
+              🔒 Restrict comparisons to category: <strong>{currentCategory}</strong>
+            </span>
+          )}
+        </div>
+
         <div className="pdiff-selector">
           <div className="pdiff-select-group">
-            <label>📄 Old Policy</label>
-            <select value={oldPolicy} onChange={e => setOldPolicy(e.target.value)} className="pdiff-select old-select">
-              <option value="">— select —</option>
-              {policies.map(p => (
-                <option key={p.name} value={p.name}>{p.name}</option>
+            <label>📄 Old Policy (Base Version)</label>
+            <select value={oldPolicy} onChange={e => handleOldPolicyChange(e.target.value)} className="pdiff-select old-select">
+              <option value="">— select old policy version —</option>
+              {oldPolicyOptions.map(p => (
+                <option key={p.name} value={p.name}>
+                  {p.name} [{p.version_name || 'v1.0'}] ({p.category_name || p.policy_type || 'General'})
+                </option>
               ))}
             </select>
           </div>
@@ -323,11 +383,13 @@ const PolicyDiffCompare = ({ policies, credentials, onClose }) => {
           <div className="pdiff-arrow">→</div>
 
           <div className="pdiff-select-group">
-            <label>📄 New Policy</label>
-            <select value={newPolicy} onChange={e => setNewPolicy(e.target.value)} className="pdiff-select new-select">
-              <option value="">— select —</option>
-              {policies.map(p => (
-                <option key={p.name} value={p.name}>{p.name}</option>
+            <label>📄 New Policy (Updated Version)</label>
+            <select value={newPolicy} onChange={e => setNewPolicy(e.target.value)} className="pdiff-select new-select" disabled={!oldPolicy}>
+              <option value="">— select updated policy version —</option>
+              {newPolicyOptions.map(p => (
+                <option key={p.name} value={p.name}>
+                  {p.name} [{p.version_name || 'v1.0'}] ({p.category_name || p.policy_type || 'General'})
+                </option>
               ))}
             </select>
           </div>
@@ -337,7 +399,7 @@ const PolicyDiffCompare = ({ policies, credentials, onClose }) => {
             onClick={handleCompare}
             disabled={loading || !oldPolicy || !newPolicy}
           >
-            {loading ? <span className="pdiff-spinner" /> : '🔍'} Compare
+            {loading ? <span className="pdiff-spinner" /> : '🔍'} Compare Updates
           </button>
 
           <button
@@ -349,9 +411,14 @@ const PolicyDiffCompare = ({ policies, credentials, onClose }) => {
           </button>
         </div>
 
+        {notEnoughVersions && (
+          <div style={{ margin: '8px 24px', padding: '8px 14px', background: '#fffbe8', border: '1px solid #ffe58f', borderRadius: '6px', color: '#854d0e', fontSize: '13px' }}>
+            ℹ️ Category <strong>"{currentCategory}"</strong> currently has only {categoryPolicies.length} policy uploaded ({categoryPolicies[0]?.name}). Upload updated versions under category <strong>"{currentCategory}"</strong> from Admin to perform policy comparisons.
+          </div>
+        )}
+
         {error && <div className="pdiff-error">⚠️ {error}</div>}
 
-        {/* ── Controls bar ── */}
         {pageDiffs.length > 0 && (
           <div className="pdiff-controls">
             <div className="pdiff-controls-left">
@@ -383,10 +450,8 @@ const PolicyDiffCompare = ({ policies, credentials, onClose }) => {
           </div>
         )}
 
-        {/* ── Page list sidebar + panels ── */}
         {pageDiffs.length > 0 && current && (
           <div className="pdiff-body">
-            {/* Page list */}
             <div className="pdiff-pagelist">
               <div className="pagelist-title">Pages</div>
               <div className="pagelist-scroll">
@@ -404,13 +469,19 @@ const PolicyDiffCompare = ({ policies, credentials, onClose }) => {
               </div>
             </div>
 
-            {/* Comparison panels */}
             <div className="pdiff-panels">
-              {/* LEFT — Old */}
               <div className="pdiff-panel old-panel">
                 <div className="panel-head old-head">
                   <span className="panel-head-icon">−</span>
-                  <span>{oldPolicy}</span>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: '6px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    <strong>{oldPolicy}</strong>
+                    <span style={{ background: 'rgba(255,255,255,0.2)', padding: '2px 6px', borderRadius: '4px', fontSize: '11px' }}>
+                      {oldObj?.version_name || 'v1.0'}
+                    </span>
+                    <span style={{ background: 'rgba(255,255,255,0.15)', padding: '2px 6px', borderRadius: '4px', fontSize: '11px' }}>
+                      {oldObj?.category_name || oldObj?.policy_type || 'General'}
+                    </span>
+                  </span>
                   <span className="panel-head-page">Page {current.pageNum}</span>
                 </div>
                 <div
@@ -429,18 +500,24 @@ const PolicyDiffCompare = ({ policies, credentials, onClose }) => {
                 </div>
               </div>
 
-              {/* divider */}
               <div className="pdiff-divider">
                 {current.hasDiff
                   ? <span className="divider-badge changed">CHANGED</span>
                   : <span className="divider-badge same">SAME</span>}
               </div>
 
-              {/* RIGHT — New */}
               <div className="pdiff-panel new-panel">
                 <div className="panel-head new-head">
                   <span className="panel-head-icon">+</span>
-                  <span>{newPolicy}</span>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: '6px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    <strong>{newPolicy}</strong>
+                    <span style={{ background: 'rgba(255,255,255,0.2)', padding: '2px 6px', borderRadius: '4px', fontSize: '11px' }}>
+                      {newObj?.version_name || 'v1.0'}
+                    </span>
+                    <span style={{ background: 'rgba(255,255,255,0.15)', padding: '2px 6px', borderRadius: '4px', fontSize: '11px' }}>
+                      {newObj?.category_name || newObj?.policy_type || 'General'}
+                    </span>
+                  </span>
                   <span className="panel-head-page">Page {current.pageNum}</span>
                 </div>
                 <div
@@ -462,7 +539,6 @@ const PolicyDiffCompare = ({ policies, credentials, onClose }) => {
           </div>
         )}
 
-        {/* Empty state */}
         {!loading && pageDiffs.length === 0 && !error && (
           <div className="pdiff-empty">
             <div className="pdiff-empty-icon">📂</div>

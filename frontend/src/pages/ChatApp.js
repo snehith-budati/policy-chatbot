@@ -110,6 +110,7 @@ function ChatApp() {
       recognitionRef.current = recognition;
     }
 
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const toggleListening = () => {
@@ -292,6 +293,7 @@ function ChatApp() {
       scrollToBottom();
     }
 
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [conversation, isTyping, scrollToBottom]);
 
 

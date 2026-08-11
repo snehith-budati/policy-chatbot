@@ -78,6 +78,7 @@ function Admin() {
       fetchDashboardData();
     }
 
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthenticated]);
 
 

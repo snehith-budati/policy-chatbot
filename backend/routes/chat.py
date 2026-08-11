@@ -234,6 +234,16 @@ def chat():
             top_candidates = [best_chunks[i] for i in range(min(20, len(best_chunks)))]
             top_chunks = rerank_chunks(question, top_candidates, top_k=5)
             
+            doc_id_triggers = [
+                "in which policy", "which policy", "which document", "in which document",
+                "where is the policy", "what policy document", "where can i find the policy",
+                "in what policy", "what document contains", "which file contains", "in which file",
+                "in which policy is", "which policy contains", "which document has"
+            ]
+            is_doc_id_intent = any(trigger in question_lower for trigger in doc_id_triggers)
+            if is_doc_id_intent:
+                print(f"🎯 Document Identification Intent detected for: '{question}'")
+
             sources = []
             for r in top_chunks:
                 sources.append({
@@ -246,7 +256,7 @@ def chat():
                     "text_snippet": r['text'][:200] + "..." if len(r['text']) > 200 else r['text']
                 })
             
-            prompt = create_enhanced_prompt(question, top_chunks, best_pdf)
+            prompt = create_enhanced_prompt(question, top_chunks, best_pdf, is_doc_id_intent=is_doc_id_intent)
             
             if prompt is None or str(prompt).startswith('__LOW_CONFIDENCE__'):
                 parts = str(prompt or '').split('::')
@@ -337,6 +347,10 @@ def chat():
                 answer = clean_excerpt_references(answer)
                 answer = clean_answer(answer, best_pdf)
                 answer = remove_citations_from_text(answer)
+
+                if is_doc_id_intent and best_pdf:
+                    if best_pdf.lower() not in answer.lower():
+                        answer = f"The requested information is provided in the policy document **{best_pdf}**.\n\n{answer}"
                 
                 refusal_phrases = [
                     "i can only answer questions related to srm university ap",

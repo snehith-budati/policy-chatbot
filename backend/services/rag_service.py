@@ -373,7 +373,7 @@ def semantic_search(query, n_results=15, min_score=0.25, pdf_filter=None, query_
 
 from services.prompt_service import build_dynamic_prompt
 
-def create_enhanced_prompt(question, chunks, pdf_name, policy_type="General", model_type="phi3"):
+def create_enhanced_prompt(question, chunks, pdf_name, policy_type="General", model_type="phi3", is_doc_id_intent=False):
     if not chunks:
         return None
     
@@ -382,7 +382,7 @@ def create_enhanced_prompt(question, chunks, pdf_name, policy_type="General", mo
         section = chunks[0].get('section', 'the relevant section')
         return f"__LOW_CONFIDENCE__::{pdf_name}::{section}"
     
-    return build_dynamic_prompt(pdf_name, policy_type, chunks, question, model_type)
+    return build_dynamic_prompt(pdf_name, policy_type, chunks, question, model_type, is_doc_id_intent=is_doc_id_intent)
 
 def clean_excerpt_references(answer):
     phrases_to_remove = [

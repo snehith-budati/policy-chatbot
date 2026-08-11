@@ -82,6 +82,7 @@ const DocumentCompareView = ({ document, onClose }) => {
                 URL.revokeObjectURL(pdfBlobUrl);
             }
         };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [document?.pdf_url]);
 
     const handleRetry = () => {

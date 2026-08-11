@@ -436,19 +436,18 @@ function ChatApp() {
 
   const handlePolicyClick = async (policy) => {
     try {
-      setSelectedPolicy(policy);
+      const normalizedPolicy = typeof policy === 'string'
+        ? { name: policy, page: 0 }
+        : {
+            name: policy?.name || policy?.pdf || policy?.filename || '',
+            page: policy?.page !== undefined ? policy.page : 0,
+            highlightText: policy?.highlightText || policy?.text_snippet || policy?.text || ''
+          };
+
+      setSelectedPolicy(normalizedPolicy);
       setShowPdfPopup(true);
-      setPdfLoading(true);
-      setPdfError(null);
-
-
-      if (!sessionStorage.getItem('adminUsername')) {
-        sessionStorage.setItem('adminUsername', 'capstoneb2');
-        sessionStorage.setItem('adminPassword', '1234');
-      }
-
       setPdfLoading(false);
-
+      setPdfError(null);
     } catch (error) {
       console.error("Error preparing PDF view:", error);
       setPdfError(error.message || "Failed to load PDF");

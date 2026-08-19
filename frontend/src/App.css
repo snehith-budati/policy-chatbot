@@ -1,0 +1,226 @@
+/* App.css - Main styles for router */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  /* Modern Professional Light Gradient */
+  background: linear-gradient(-45deg, #F8FAFC, #F1F5F9, #FFFFFF, #F8FAFC);
+  background-size: 400% 400%;
+  animation: gradientSway 15s ease infinite;
+  overflow-x: hidden;
+  position: relative;
+}
+
+/* Extreme Global Floating Light Orbs for depth */
+body::before,
+body::after {
+  content: "";
+  position: absolute;
+  width: 50vw;
+  height: 50vw;
+  border-radius: 50%;
+  filter: blur(80px);
+  z-index: -1;
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+body::before {
+  background: var(--color-copper, #f37021);
+  top: -10%;
+  left: -10%;
+  animation: floatOrb 20s infinite alternate ease-in-out;
+}
+
+body::after {
+  background: var(--color-navy, #0f172a);
+  bottom: -10%;
+  right: -10%;
+  animation: floatOrb 25s infinite alternate-reverse ease-in-out;
+}
+
+@keyframes floatOrb {
+  0% {
+    transform: translate(0, 0) scale(1);
+  }
+
+  50% {
+    transform: translate(20%, 20%) scale(1.2);
+  }
+
+  100% {
+    transform: translate(-10%, 30%) scale(0.9);
+  }
+}
+
+@keyframes gradientSway {
+  0% {
+    background-position: 0% 50%;
+  }
+
+  50% {
+    background-position: 100% 50%;
+  }
+
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+/* ============== CINEMATIC PAGE TRANSITION ============== */
+.page-loading-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(255, 255, 255, 0.4);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  z-index: 99999;
+  animation: pageWipe 0.8s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+@keyframes pageWipe {
+  0% {
+    opacity: 0;
+    backdrop-filter: blur(0px);
+  }
+
+  100% {
+    opacity: 1;
+    backdrop-filter: blur(20px);
+  }
+}
+
+/* Smooth Page Entrance */
+.page-entrance {
+  animation: cinematicEntrance 1.2s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+}
+
+@keyframes cinematicEntrance {
+  from {
+    opacity: 0;
+    transform: translateY(20px) scale(0.98);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.loading-spinner-large {
+  width: 70px;
+  height: 70px;
+  border: 4px solid rgba(243, 112, 33, 0.15);
+  border-top-color: var(--color-copper, #f37021);
+  border-left-color: var(--color-copper, #f37021);
+  border-radius: 50%;
+  animation: spin 0.8s cubic-bezier(0.68, -0.55, 0.265, 1.55) infinite;
+  margin-bottom: 24px;
+  box-shadow: 0 0 25px rgba(243, 112, 33, 0.3);
+}
+
+.loading-text {
+  color: var(--color-copper, #f37021);
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  animation: pulseText 1.5s ease-in-out infinite;
+}
+
+@keyframes pulseText {
+
+  0%,
+  100% {
+    opacity: 0.6;
+    transform: translateY(0);
+  }
+
+  50% {
+    opacity: 1;
+    transform: translateY(-2px);
+    text-shadow: 0 4px 12px rgba(243, 112, 33, 0.3);
+  }
+}
+
+/* Background logo is now handled globally in index.css */
+
+/* ============== ANIMATIONS ============== */
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
+  }
+
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes pulse {
+
+  0%,
+  100% {
+    opacity: 0.7;
+    transform: scale(1);
+  }
+
+  50% {
+    opacity: 1;
+    transform: scale(1.05);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+
+/* ============== ANIMATIONS ============== */
+
+@keyframes slideIn {
+  from {
+    transform: translateY(-20px);
+    opacity: 0;
+  }
+
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+/* ============== RESPONSIVE ============== */
+@media (max-width: 768px) {
+  .background-logo {
+    background-size: 80%;
+    opacity: 0.02;
+  }
+
+  .loading-spinner-large {
+    width: 40px;
+    height: 40px;
+  }
+
+  .loading-text {
+    font-size: 16px;
+  }
+}
+
+/* Import other CSS files */
+@import url('./pages/ChatApp.css');
+@import url('./pages/Admin.css');

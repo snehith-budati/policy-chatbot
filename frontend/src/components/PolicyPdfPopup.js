@@ -1,4 +1,3 @@
-// #Updated on 5th March - Fixed ESLint warning
 import React, { useState, useEffect } from 'react';
 import './PolicyPdfPopup.css';
 
@@ -7,9 +6,13 @@ const PolicyPdfPopup = ({ policy, onClose, loading, error }) => {
     const [localLoading, setLocalLoading] = useState(false);
     const [localError, setLocalError] = useState(null);
 
+    const pdfName = typeof policy === 'string'
+        ? policy
+        : (policy?.name || policy?.pdf || policy?.filename || '');
+
     useEffect(() => {
         const fetchPdf = async () => {
-            if (!policy?.name) {
+            if (!pdfName) {
                 setLocalError("No policy selected");
                 return;
             }
@@ -18,45 +21,53 @@ const PolicyPdfPopup = ({ policy, onClose, loading, error }) => {
             setLocalError(null);
 
             try {
-                // Get authentication from session storage
-                const username = sessionStorage.getItem('adminUsername') || 'capstoneb2';
-                const password = sessionStorage.getItem('adminPassword') || '1234';
+                const apiBase = process.env.REACT_APP_API_URL || "http://localhost:5001";
+                const userEmail = localStorage.getItem("userEmail") || "user@srmap.edu.in";
                 
-                // Create Basic Auth token
-                const token = btoa(`${username}:${password}`);
-                
-                // Construct PDF URL
-                const pdfUrl = `${process.env.REACT_APP_API_URL || `${process.env.REACT_APP_API_URL || "http://localhost:5001"}`}/serve-pdf/${encodeURIComponent(policy.name)}`;
-                
+                // Primary: Try public policy view route first
+                let pdfUrl = `${apiBase}/policies/${encodeURIComponent(pdfName)}/view?user_email=${encodeURIComponent(userEmail)}`;
                 console.log("Fetching PDF from:", pdfUrl);
                 
-                // Fetch PDF with authentication headers
-                const response = await fetch(pdfUrl, {
+                let response = await fetch(pdfUrl, {
                     method: 'GET',
                     headers: {
-                        'Authorization': `Basic ${token}`,
-                        'Accept': 'application/pdf'
+                        'Accept': 'application/pdf',
+                        'X-User-Email': userEmail
                     }
                 });
+
+                // Fallback: Try admin serve-pdf route if primary endpoint returns 404 or auth issue
+                if (!response.ok) {
+                    const username = sessionStorage.getItem('adminUsername') || 'capstoneb2';
+                    const password = sessionStorage.getItem('adminPassword') || '1234';
+                    const token = btoa(`${username}:${password}`);
+                    
+                    pdfUrl = `${apiBase}/serve-pdf/${encodeURIComponent(pdfName)}`;
+                    response = await fetch(pdfUrl, {
+                        method: 'GET',
+                        headers: {
+                            'Authorization': `Basic ${token}`,
+                            'Accept': 'application/pdf'
+                        }
+                    });
+                }
 
                 if (!response.ok) {
                     if (response.status === 401) {
                         throw new Error('Authentication failed. Please log in again.');
                     } else if (response.status === 404) {
-                        throw new Error('PDF file not found.');
+                        throw new Error(`PDF file "${pdfName}" not found on server.`);
                     } else {
                         throw new Error(`HTTP error! status: ${response.status}`);
                     }
                 }
 
-                // Get PDF as blob
                 const blob = await response.blob();
                 
                 if (blob.size === 0) {
                     throw new Error('PDF file is empty');
                 }
 
-                // Create local blob URL
                 const url = URL.createObjectURL(blob);
                 setPdfBlobUrl(url);
                 console.log("PDF loaded successfully, size:", blob.size, "bytes");
@@ -71,27 +82,29 @@ const PolicyPdfPopup = ({ policy, onClose, loading, error }) => {
 
         fetchPdf();
 
-        // Cleanup function
         return () => {
-            if (pdfBlobUrl) {
-                URL.revokeObjectURL(pdfBlobUrl);
-            }
+            setPdfBlobUrl(prevUrl => {
+                if (prevUrl) URL.revokeObjectURL(prevUrl);
+                return null;
+            });
         };
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [policy?.name]); // Only depend on policy.name, not pdfBlobUrl
+    }, [pdfName]);
 
-    // Handle retry
     const handleRetry = () => {
         setPdfBlobUrl(null);
         setLocalError(null);
         setLocalLoading(true);
     };
 
+    const targetPage = typeof policy === 'object' && policy !== null && (policy.page !== undefined)
+        ? (parseInt(policy.page, 10) + 1)
+        : 1;
+
     return (
         <div className="pdf-popup-overlay" onClick={onClose}>
             <div className="pdf-popup-container" onClick={(e) => e.stopPropagation()}>
                 <div className="pdf-popup-header">
-                    <h3>{policy?.name || 'Policy Document'}</h3>
+                    <h3>{pdfName || 'Policy Document'}</h3>
                     <button className="pdf-popup-close" onClick={onClose}>×</button>
                 </div>
                 
@@ -106,11 +119,6 @@ const PolicyPdfPopup = ({ policy, onClose, loading, error }) => {
                     {(error || localError) && (
                         <div className="pdf-error">
                             <p>❌ {error || localError}</p>
-                            {localError?.includes('Authentication') && (
-                                <p className="error-hint">
-                                    Please log in to admin panel first to authenticate.
-                                </p>
-                            )}
                             <div className="error-actions">
                                 <button onClick={handleRetry} className="retry-btn">
                                     Try Again
@@ -124,12 +132,12 @@ const PolicyPdfPopup = ({ policy, onClose, loading, error }) => {
                     
                     {pdfBlobUrl && !loading && !localLoading && !error && !localError && (
                         <iframe
-                            src={policy?.highlightText ? `${pdfBlobUrl}#page=${(policy.page || 0) + 1}&search=${encodeURIComponent(policy.highlightText)}` : `${pdfBlobUrl}#page=${(policy?.page || 0) + 1}`}
-                            title={policy?.name}
+                            src={`${pdfBlobUrl}#page=${targetPage}`}
+                            title={pdfName}
                             className="pdf-iframe"
                             width="100%"
                             height="100%"
-                            onLoad={() => console.log("PDF iframe loaded")}
+                            onLoad={() => console.log("PDF iframe loaded successfully")}
                             onError={(e) => {
                                 console.error("Iframe error:", e);
                                 setLocalError("Failed to display PDF in iframe");
@@ -137,8 +145,6 @@ const PolicyPdfPopup = ({ policy, onClose, loading, error }) => {
                         />
                     )}
                 </div>
-                
-                {/* Footer removed as requested */}
             </div>
         </div>
     );

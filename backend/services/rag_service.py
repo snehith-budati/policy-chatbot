@@ -2,9 +2,11 @@ import os
 import re
 import json
 import typing
+import hashlib
 import numpy as np
 import ollama
 import requests
+import psycopg2
 from config import *
 from core.db import get_db, get_ist_now
 
@@ -12,7 +14,6 @@ CHUNK_SIZE = 300
 CHUNK_OVERLAP = 50
 CONFIDENCE_THRESHOLD = 0.38
 
-# Cross-Encoder for semantic re-ranking
 try:
     from sentence_transformers import CrossEncoder
     _cross_encoder = None
@@ -47,7 +48,6 @@ def rerank_chunks(question: str, chunks: list, top_k: int = 3) -> list:
         print(f"⚠️ Cross-encoder error (falling back): {e}")
         return chunks[:top_k]
 
-# BitNet 1.58B Configuration & Inference
 BITNET_CPP_DIR = os.environ.get(
     'BITNET_CPP_DIR',
     os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'BitNet')
@@ -183,73 +183,78 @@ def cosine_similarity(a_bytes, b_bytes):
     except Exception as e:
         return 0
 
-import psycopg2
+from services.chroma_service import qa_cache_chroma, policy_chroma
 
-def check_semantic_cache(question_embedding_bytes, threshold=0.88):
+def normalize_question(question: str) -> str:
+    if not question:
+        return ""
+    cleaned = re.sub(r'[^\w\s]', '', question.lower()).strip()
+    return re.sub(r'\s+', ' ', cleaned)
+
+def check_exact_cache(question: str):
+    """Exact/High-similarity cache lookup in ChromaDB QA cache."""
     try:
-        db = get_db()
-        cached_items = db.execute("SELECT id, question, embedding FROM semantic_cache").fetchall()
-        
-        if not cached_items:
+        if not question:
             return None, None
-            
-        q_vec = np.frombuffer(question_embedding_bytes, dtype=np.float32)
-        q_norm = np.linalg.norm(q_vec)
-        if q_norm == 0: return None, None
-
-        best_score = 0
-        best_match_id = None
-        best_match_q = None
-        
-        for item in cached_items:
-            it_vec = np.frombuffer(bytes(item['embedding']), dtype=np.float32)
-            it_norm = np.linalg.norm(it_vec)
-            if it_norm == 0: continue
-            
-            score = float(np.dot(q_vec, it_vec) / (q_norm * it_norm))
-            
-            if score > best_score:
-                best_score = score
-                best_match_id = item['id']
-                best_match_q = item['question']
-        
-        if best_match_id:
-            print(f"🔍 [CACHE DEBUG]: Closest match similarity: {best_score:.4f} with '{best_match_q}'")
-            
-            if best_score >= threshold:
-                print(f"🚀 [CACHE HIT]: Similarity {best_score:.4f} exceeds threshold {threshold}")
-                
-                match_data = db.execute(
-                    "SELECT answer, sources FROM semantic_cache WHERE id = %s",
-                    (best_match_id,)
-                ).fetchone()
-                
-                db.execute(
-                    "UPDATE semantic_cache SET hit_count = hit_count + 1, last_hit = (NOW() + INTERVAL '5 hours 30 minutes') WHERE id = %s",
-                    (best_match_id,)
-                )
-                db.commit()
-                return match_data['answer'], match_data['sources']
-            else:
-                print(f"⏭️ [CACHE MISS]: Similarity {best_score:.4f} below threshold {threshold}")
-            
+        emb = create_embedding(question)
+        answer, sources, sim = qa_cache_chroma.search_cache(emb, threshold=0.99)
+        if answer:
+            print(f"🚀 [ChromaDB EXACT CACHE HIT]: Match found for '{question}' (Sim: {sim:.4f})")
+            return answer, sources
         return None, None
     except Exception as e:
-        print(f"⚠️ Cache lookup error: {e}")
+        print(f"⚠️ Exact cache check error: {e}")
         return None, None
 
-def add_to_semantic_cache(question, embedding_bytes, answer, sources_json):
+def check_semantic_cache(question_embedding_bytes_or_str, threshold=0.88):
+    """
+    Workflow 2 - Primary QA Cache Evaluation:
+    Queries the physically isolated ChromaDB QA Cache instance (./chroma_db/qa_cache).
+    If cosine similarity >= 0.88, returns cached (answer, sources).
+    """
     try:
+        if isinstance(question_embedding_bytes_or_str, str):
+            question_embedding_bytes_or_str = create_embedding(question_embedding_bytes_or_str)
+
+        answer, sources, similarity = qa_cache_chroma.search_cache(
+            question_embedding_bytes_or_str, threshold=threshold
+        )
+        if answer:
+            return answer, sources
+
+        return None, None
+    except Exception as e:
+        print(f"⚠️ ChromaDB QA Cache lookup error: {e}")
+        return None, None
+
+def add_to_semantic_cache(question: str, embedding_bytes: bytes = None, answer: str = "", sources_json: str = "[]"):
+    """
+    Workflow 2 - QA Cache Store:
+    Inserts Q&A prompt vector strictly into isolated ChromaDB QA Cache instance (./chroma_db/qa_cache).
+    """
+    if isinstance(embedding_bytes, str) and not answer:
+        answer = embedding_bytes
+        embedding_bytes = None
+        
+    try:
+        if embedding_bytes is None and question:
+            embedding_bytes = create_embedding(question)
+
+        # 1. Primary: Save to physically isolated ChromaDB QA Cache instance
+        qa_cache_chroma.add_to_cache(question, embedding_bytes, answer, sources_json)
+
+        # 2. Secondary: Persist backup record to PostgreSQL
         db = get_db()
+        emb_binary = psycopg2.Binary(embedding_bytes) if embedding_bytes else None
+
         db.execute(
             '''INSERT INTO semantic_cache (question, embedding, answer, sources) 
                VALUES (%s, %s, %s, %s)
                ON CONFLICT (question) 
                DO UPDATE SET embedding = EXCLUDED.embedding, answer = EXCLUDED.answer, sources = EXCLUDED.sources''',
-            (question, psycopg2.Binary(embedding_bytes), answer, sources_json)
+            (question, emb_binary, answer, sources_json)
         )
         db.commit()
-        print(f"💾 [CACHE STORE]: Cached new question '{question}'")
     except Exception as e:
         print(f"⚠️ Cache storage error: {e}")
 
@@ -274,13 +279,31 @@ def get_policy_list_formatted():
         return "  • Unable to fetch policy list"
 
 def semantic_search(query, n_results=15, min_score=0.25, pdf_filter=None, query_embedding=None):
-    """Enhanced semantic search including embedding reuse."""
     try:
-        db = get_db()
-        
         if query_embedding is None:
             query_embedding = create_embedding(query)
-            
+
+        chroma_results = policy_chroma.search_policy_chunks(
+            query_embedding, top_k=n_results, min_score=min_score, pdf_filter=pdf_filter
+        )
+
+        if chroma_results:
+            doc_scores: typing.Dict[str, typing.List[float]] = {}
+            for r in chroma_results:
+                pdf = str(r['pdf'])
+                if pdf not in doc_scores:
+                    doc_scores[pdf] = []
+                doc_scores[pdf].append(float(r['score']))
+
+            doc_avg = {pdf: sum(scores)/len(scores) for pdf, scores in doc_scores.items() if len(scores) > 0}
+            if doc_avg:
+                best_doc = max(doc_avg, key=lambda k: doc_avg[k])
+                best_avg = doc_avg[best_doc]
+                print(f"\n📊 Document with highest semantic relevance (ChromaDB Policy DB): {best_doc}")
+                print(f"   Average semantic score: {best_avg:.3f}")
+            return chroma_results[:n_results]
+
+        db = get_db()
         query_np = np.frombuffer(query_embedding, dtype=np.float32)
         
         query_str = '''
@@ -320,8 +343,8 @@ def semantic_search(query, n_results=15, min_score=0.25, pdf_filter=None, query_
         
         scored_results.sort(key=lambda x: x['score'], reverse=True)
         
-        doc_scores: typing.Dict[str, typing.List[float]] = {}
-        doc_chunks: typing.Dict[str, typing.List[typing.Any]] = {}
+        doc_scores = {}
+        doc_chunks = {}
         
         for r in scored_results:
             pdf = str(r['pdf'])
@@ -336,9 +359,8 @@ def semantic_search(query, n_results=15, min_score=0.25, pdf_filter=None, query_
         best_doc = max(doc_avg, key=lambda k: doc_avg[k])
         best_avg = doc_avg[best_doc]
         
-        print(f"\n📊 Document with highest semantic relevance: {best_doc}")
+        print(f"\n📊 Document with highest semantic relevance (PostgreSQL Fallback): {best_doc}")
         print(f"   Average semantic score: {best_avg:.3f}")
-        print(f"   Other documents: {[(pdf, f'{avg:.3f}') for pdf, avg in doc_avg.items() if pdf != best_doc][:3]}")
         
         final_results = list(doc_chunks[best_doc])
         final_results.sort(key=lambda x: x['score'], reverse=True)
@@ -351,8 +373,7 @@ def semantic_search(query, n_results=15, min_score=0.25, pdf_filter=None, query_
 
 from services.prompt_service import build_dynamic_prompt
 
-def create_enhanced_prompt(question, chunks, pdf_name, policy_type="General", model_type="phi3"):
-    """Create a strictly-grounded prompt using dynamic 2-part prompt service. Returns None if confidence is too low."""
+def create_enhanced_prompt(question, chunks, pdf_name, policy_type="General", model_type="phi3", is_doc_id_intent=False):
     if not chunks:
         return None
     
@@ -361,10 +382,9 @@ def create_enhanced_prompt(question, chunks, pdf_name, policy_type="General", mo
         section = chunks[0].get('section', 'the relevant section')
         return f"__LOW_CONFIDENCE__::{pdf_name}::{section}"
     
-    return build_dynamic_prompt(pdf_name, policy_type, chunks, question, model_type)
+    return build_dynamic_prompt(pdf_name, policy_type, chunks, question, model_type, is_doc_id_intent=is_doc_id_intent)
 
 def clean_excerpt_references(answer):
-    """Remove any remaining references to excerpts or similar phrases"""
     phrases_to_remove = [
         "Based on the provided excerpt",
         "According to the excerpt",
@@ -383,7 +403,6 @@ def clean_excerpt_references(answer):
     return answer
 
 def clean_answer(answer, pdf_name):
-    """Remove any references to other documents from the answer"""
     other_pdfs = [
         "Email-Policy.pdf",
         "Sexual-Harassment-Policy.pdf", 
@@ -407,7 +426,6 @@ def clean_answer(answer, pdf_name):
     return answer
 
 def remove_citations_from_text(answer):
-    """Proactively remove ANY citations the LLM might have included anywhere in the text"""
     answer = re.sub(r'[\(\[]Policy Document:.*?[\)\]]', '', answer, flags=re.IGNORECASE)
     answer = re.sub(r'[\(\[]Page\s*\d+.*?[\)\]]', '', answer, flags=re.IGNORECASE)
     answer = re.sub(r'[\(\[]p\.?\s*\d+.*?[\)\]]', '', answer, flags=re.IGNORECASE)

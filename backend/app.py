@@ -18,24 +18,19 @@ from routes.policies import policies_bp
 from routes.admin import admin_bp
 from routes.system import system_bp
 
-# Initialize Flask application
 app = Flask(__name__)
 CORS(app)
 
-# Application Configuration
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
-# Register Limiter
 if LIMITER_AVAILABLE and hasattr(limiter, 'init_app'):
     limiter.init_app(app)
 
-# Teardown database connection
 @app.teardown_appcontext
 def teardown_db(exception):
     close_connection(exception)
 
-# Admin access logger
 @app.before_request
 def log_admin_access():
     if request.path == '/admin/stats' and request.method == 'GET':
@@ -43,7 +38,6 @@ def log_admin_access():
         if auth:
             log_admin_action(auth.username, "ACCESS", "Accessed Admin Dashboard")
 
-# Register Modular Blueprints
 app.register_blueprint(auth_bp)
 app.register_blueprint(chat_bp)
 app.register_blueprint(upload_bp)
@@ -51,11 +45,9 @@ app.register_blueprint(policies_bp)
 app.register_blueprint(admin_bp)
 app.register_blueprint(system_bp)
 
-# Initialize Database on App Context
 with app.app_context():
     init_db()
 
-# Main Entrypoint
 if __name__ == '__main__':
     print("=" * 70)
     print("🎓 SRM University AP - Universal Policy Hub")
@@ -69,14 +61,12 @@ if __name__ == '__main__':
     print(f"   └─ EasyOCR: {'✅' if EASYOCR_AVAILABLE else '❌'}")
     print("-" * 70)
     
-    # Test Ollama connection
     try:
         ollama.list()
         print("✅ Ollama connection successful!")
     except Exception:
         print("⚠️  Ollama not running. Please run: ollama serve")
     
-    # Check GLM-OCR model presence
     if MLX_AVAILABLE:
         if os.path.exists(GLM_OCR_MODEL_PATH):
             print("✅ GLM-OCR model found")

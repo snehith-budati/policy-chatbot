@@ -26,6 +26,7 @@ BitNet/logs/
 # App Data
 backend/uploads/
 uploads/
+backend/chroma_db/
 *.db
 *.db-journal
 *.sqlite

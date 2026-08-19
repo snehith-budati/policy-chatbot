@@ -5,8 +5,8 @@ import SourcePopup from "../components/SourcePopup";
 import PolicyPdfPopup from "../components/PolicyPdfPopup";
 import PolicyDiffCompare from "../components/PolicyDiffCompare";
 
-// Typewriter component for smooth bot response animation
-// Typewriter component for smooth bot response animation
+
+
 const Typewriter = ({ text, delay = 20, onComplete, onUpdate, formatFn }) => {
   const [currentText, setCurrentText] = useState("");
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -17,7 +17,7 @@ const Typewriter = ({ text, delay = 20, onComplete, onUpdate, formatFn }) => {
       const timeout = setTimeout(() => {
         setCurrentText(prev => prev + (currentIndex > 0 ? " " : "") + words[currentIndex]);
         setCurrentIndex(prev => prev + 1);
-        if (onUpdate) onUpdate(); // Signal that content changed
+        if (onUpdate) onUpdate(); 
       }, delay);
       return () => clearTimeout(timeout);
     } else if (onComplete) {
@@ -39,32 +39,32 @@ function ChatApp() {
   const [loginLoading, setLoginLoading] = useState(false);
   const [expandedEvidence, setExpandedEvidence] = useState({});
 
-  // Session states
+
   const [sessions, setSessions] = useState([]);
   const [currentSessionId, setCurrentSessionId] = useState(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isTyping, setIsTyping] = useState(false);
 
-  // Popup states
+
   const [popupSource, setPopupSource] = useState(null);
   const [policies, setPolicies] = useState([]);
   const [showPolicies, setShowPolicies] = useState(false);
   const [showDiffCompare, setShowDiffCompare] = useState(false);
 
-  // PDF popup states
+
   const [selectedPolicy, setSelectedPolicy] = useState(null);
   const [showPdfPopup, setShowPdfPopup] = useState(false);
   const [pdfLoading, setPdfLoading] = useState(false);
   const [pdfError, setPdfError] = useState(null);
 
-  // Feedback states
+
   const [showFeedback, setShowFeedback] = useState(false);
   const [feedbackStars, setFeedbackStars] = useState(0);
   const [feedbackText, setFeedbackText] = useState("");
   const [feedbackSubmitted, setFeedbackSubmitted] = useState(false);
   const [hasSubmittedFeedback, setHasSubmittedFeedback] = useState(false);
 
-  // Search states
+
   const [sidebarSearch, setSidebarSearch] = useState("");
   const [chatSearch, setChatSearch] = useState("");
   const [currentHitIndex, setCurrentHitIndex] = useState(-1);
@@ -86,7 +86,7 @@ function ChatApp() {
   const speechRef = useRef(null);
   const [isListening, setIsListening] = useState(false);
   const recognitionRef = useRef(null);
-  // Initialize Speech Recognition
+
   useEffect(() => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (SpeechRecognition) {
@@ -101,14 +101,15 @@ function ChatApp() {
         const transcript = event.results[0][0].transcript;
         setQ(transcript);
 
-        // --- Live Voice Chat Mode: Auto-Send ---
-        // Pass transcript directly to send() to avoid state race conditions
+
+
         send(transcript);
       };
       recognition.onerror = () => setIsListening(false);
 
       recognitionRef.current = recognition;
     }
+
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -116,25 +117,25 @@ function ChatApp() {
     if (isListening) {
       recognitionRef.current?.stop();
     } else {
-      window.speechSynthesis.cancel(); // Stop bot if user starts talking
+      window.speechSynthesis.cancel(); 
       recognitionRef.current?.start();
     }
   };
 
   const handleSpeak = (text, index) => {
-    // If already speaking the same text, stop it
+
     if (speakingIndex === index) {
       window.speechSynthesis.cancel();
       setSpeakingIndex(null);
       return;
     }
 
-    // Stop previous if any
+
     window.speechSynthesis.cancel();
 
     const utterance = new SpeechSynthesisUtterance(text);
 
-    // Use strictly UK Female Voices: Google UK English Female or Serena
+
     const voices = window.speechSynthesis.getVoices();
     const premiumVoice = voices.find(v =>
       v.name.includes("Google UK English Female") ||
@@ -163,11 +164,11 @@ function ChatApp() {
   const messagesEndRef = useRef(null);
   const chatWindowRef = useRef(null);
 
-  // Typewriter placeholder logic
+
   const [placeholderText] = useState("Type a question...");
   const inputRef = useRef(null);
 
-  // Auto-resize search/input textarea
+
   useEffect(() => {
     if (inputRef.current) {
       inputRef.current.style.height = "auto";
@@ -202,7 +203,7 @@ function ChatApp() {
         if (filtered.length > 0) {
           setCurrentSessionId(filtered[0].id);
         } else {
-          // If all deleted, create one fresh
+
           const fresh = {
             id: Date.now().toString(),
             title: "New Chat",
@@ -220,7 +221,7 @@ function ChatApp() {
   const updateSessionMessages = (sessionId, newMessages) => {
     setSessions(prev => prev.map(s => {
       if (s.id === sessionId) {
-        // Update title if first message
+
         let title = s.title;
         if (s.messages.length === 0 && newMessages.length > 0) {
           const firstMsg = newMessages[0].text;
@@ -234,10 +235,10 @@ function ChatApp() {
 
 
 
-  // Typewriter effect for sidebar greeting
+
   useEffect(() => {
     if (isAuthenticated && userEmail && isSidebarOpen) {
-      // Extract first name: everything before the first '.', '_', or '@'
+
       const match = userEmail.match(/^([^@._]+)/);
       const namePart = match ? match[1] : "User";
       const firstName = namePart.charAt(0).toUpperCase() + namePart.slice(1).toLowerCase();
@@ -255,23 +256,23 @@ function ChatApp() {
       }, 100);
       return () => clearInterval(timer);
     } else if (!isSidebarOpen) {
-      setGreetingText(""); // Reset when closed
+      setGreetingText(""); 
     }
   }, [isAuthenticated, userEmail, isSidebarOpen]);
 
-  // Derived current conversation
+
   const conversation = useMemo(() => sessions.find(s => s.id === currentSessionId)?.messages || [], [sessions, currentSessionId]);
 
   const modelRef = useRef(selectedModel);
   const sessionIdRef = useRef(currentSessionId);
   const conversationRef = useRef(conversation);
 
-  // Keep refs in sync with state
+
   useEffect(() => { modelRef.current = selectedModel; }, [selectedModel]);
   useEffect(() => { sessionIdRef.current = currentSessionId; }, [currentSessionId]);
   useEffect(() => { conversationRef.current = conversation; }, [conversation]);
 
-  // Auto scroll to bottom
+
   const scrollToBottom = useCallback(() => {
     if (chatWindowRef.current) {
       chatWindowRef.current.scrollTop = chatWindowRef.current.scrollHeight;
@@ -287,14 +288,15 @@ function ChatApp() {
   }, []);
 
   useEffect(() => {
-    // Only auto-scroll to bottom if search is not active
+
     if (!chatSearch.trim()) {
       scrollToBottom();
     }
+
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [conversation, isTyping, scrollToBottom]);
 
-  // Enhanced search: calculate total hits when search text changes
+
   useEffect(() => {
     if (!chatSearch.trim()) {
       setTotalHits(0);
@@ -312,7 +314,7 @@ function ChatApp() {
           if (matches) count += matches.length;
         }
 
-        // Search in evidence and auto-expand if found
+
         if (msg.sources) {
           let hasSourceMatch = false;
           msg.sources.forEach(src => {
@@ -363,27 +365,27 @@ function ChatApp() {
     }
   };
 
-  // Function to handle automatic scrolling to the active search hit
+
   useEffect(() => {
     if (currentHitIndex !== -1) {
       const highlights = document.querySelectorAll('.search-highlight');
       const active = highlights[currentHitIndex];
       if (active) {
         active.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        // Add a temporary "focused" class
+
         active.classList.add('highlight-focused');
         setTimeout(() => active.classList.remove('highlight-focused'), 1000);
       }
     }
   }, [currentHitIndex, chatSearch]);
-  // Check if already logged in
+
   useEffect(() => {
     const savedEmail = localStorage.getItem("userEmail");
     if (savedEmail) {
       setUserEmail(savedEmail);
       setIsAuthenticated(true);
 
-      // Verification check for returning users to sync feedback status
+
       axios.post(`${process.env.REACT_APP_API_URL || "http://localhost:5001"}/auth/check`, { email: savedEmail })
         .then(res => {
           if (res.data.valid) {
@@ -395,7 +397,7 @@ function ChatApp() {
         })
         .catch(err => console.error("Sync error:", err));
 
-      // Load sessions
+
       const savedSessions = localStorage.getItem(`chatSessions_${savedEmail}`);
       if (savedSessions) {
         const parsed = JSON.parse(savedSessions);
@@ -410,13 +412,13 @@ function ChatApp() {
       }
     }
 
-    // Fetch policy list
+
     axios.get(`${process.env.REACT_APP_API_URL || "http://localhost:5001"}/policies`)
       .then(res => setPolicies(res.data))
       .catch(() => setPolicies([]));
   }, [createNewChat]);
 
-  // Show feedback popup after session start
+
   useEffect(() => {
     if (isAuthenticated && userEmail && !hasSubmittedFeedback) {
       if (!localStorage.getItem(`feedback_${userEmail}`)) {
@@ -426,29 +428,28 @@ function ChatApp() {
     }
   }, [isAuthenticated, userEmail, hasSubmittedFeedback]);
 
-  // Save sessions to local storage
+
   useEffect(() => {
     if (isAuthenticated && userEmail && sessions.length > 0) {
       localStorage.setItem(`chatSessions_${userEmail}`, JSON.stringify(sessions));
     }
   }, [sessions, isAuthenticated, userEmail]);
 
-  // Handle policy click to show PDF
+
   const handlePolicyClick = async (policy) => {
     try {
-      setSelectedPolicy(policy);
+      const normalizedPolicy = typeof policy === 'string'
+        ? { name: policy, page: 0 }
+        : {
+            name: policy?.name || policy?.pdf || policy?.filename || '',
+            page: policy?.page !== undefined ? policy.page : 0,
+            highlightText: policy?.highlightText || policy?.text_snippet || policy?.text || ''
+          };
+
+      setSelectedPolicy(normalizedPolicy);
       setShowPdfPopup(true);
-      setPdfLoading(true);
-      setPdfError(null);
-
-      // Ensure admin credentials are available for PDF fetching
-      if (!sessionStorage.getItem('adminUsername')) {
-        sessionStorage.setItem('adminUsername', 'capstoneb2');
-        sessionStorage.setItem('adminPassword', '1234');
-      }
-
       setPdfLoading(false);
-
+      setPdfError(null);
     } catch (error) {
       console.error("Error preparing PDF view:", error);
       setPdfError(error.message || "Failed to load PDF");
@@ -456,7 +457,7 @@ function ChatApp() {
     }
   };
 
-  // Close PDF popup
+
   const handleClosePdfPopup = () => {
     setShowPdfPopup(false);
     setSelectedPolicy(null);
@@ -475,14 +476,14 @@ function ChatApp() {
 
         if (response.data.valid) {
           setIsAuthenticated(true);
-          setError(""); // Clear "OTP sent successfully" message
+          setError(""); 
           localStorage.setItem("userEmail", userEmail);
           setHasSubmittedFeedback(response.data.hasSubmittedFeedback);
 
           if (response.data.hasSubmittedFeedback) {
             localStorage.setItem(`feedback_${userEmail}`, "true");
           }
-          // Store verification timestamp for 2hr bypass
+
           localStorage.setItem(`otp_verified_${userEmail}`, Date.now().toString());
         }
       } catch (error) {
@@ -493,7 +494,7 @@ function ChatApp() {
     } else {
       setError("");
 
-      // Check for 2-hour OTP bypass
+
       const lastVerified = localStorage.getItem(`otp_verified_${userEmail}`);
       if (lastVerified) {
         const timePassed = Date.now() - parseInt(lastVerified);
@@ -503,7 +504,7 @@ function ChatApp() {
           setIsAuthenticated(true);
           localStorage.setItem("userEmail", userEmail);
           setLoginLoading(false);
-          return; // Skip OTP request
+          return; 
         }
       }
 
@@ -513,15 +514,15 @@ function ChatApp() {
         });
 
         if (response.data.bypass) {
-          // Server-side 2hr window bypass
+
           setIsAuthenticated(true);
           localStorage.setItem("userEmail", userEmail);
-          // Set feedback status if returned
+
           if (response.data.hasSubmittedFeedback) {
             setHasSubmittedFeedback(true);
             localStorage.setItem(`feedback_${userEmail}`, "true");
           }
-          // Set locally too for multi-layer redundancy
+
           localStorage.setItem(`otp_verified_${userEmail}`, Date.now().toString());
           return;
         }
@@ -546,16 +547,16 @@ function ChatApp() {
 
   const handleSuggestionClick = (s) => {
     setQ(s);
-    // Automatically send the suggestion without needing to click a button
+
     setTimeout(() => {
       const btn = document.getElementById('send-btn');
       if (btn) btn.click();
     }, 50);
   };
 
-  // Close source popup
 
-  // Close source popup
+
+
   const closeSourcePopup = () => {
     setPopupSource(null);
   };
@@ -566,7 +567,7 @@ function ChatApp() {
   };
 
   const send = async (voiceQuestion = null) => {
-    // Detect if voiceQuestion is actually an event object from a button click
+
     const isVoice = typeof voiceQuestion === 'string';
     const questionToAsk = isVoice ? voiceQuestion : q;
 
@@ -575,7 +576,7 @@ function ChatApp() {
       return;
     }
 
-    // Auto-create a new chat session if none exists yet
+
     let sessionId = sessionIdRef.current;
     let currentMessages = conversationRef.current;
 
@@ -584,13 +585,13 @@ function ChatApp() {
         id: Date.now().toString(),
         title: "New Chat",
         messages: [],
-        timestamp: new Date().toISOString() // Keep storage ISO, display IST
+        timestamp: new Date().toISOString() 
       };
       setSessions(prev => [newSession, ...prev]);
       setCurrentSessionId(newSession.id);
       sessionId = newSession.id;
       currentMessages = [];
-      // Manually update the ref so following code uses the new ID
+
       sessionIdRef.current = sessionId;
     }
 
@@ -617,7 +618,7 @@ function ChatApp() {
 
     try {
       const startTime = performance.now();
-      const currentMod = modelRef.current; // Use ref to avoid stale state
+      const currentMod = modelRef.current; 
       const res = await axios.post(`${process.env.REACT_APP_API_URL || "http://localhost:5001"}/chat`, {
         question: question,
         user_email: localStorage.getItem("userEmail"),
@@ -644,7 +645,7 @@ function ChatApp() {
         chatId: res.data.chat_id
       };
 
-      // ⚡ Calculate Moving Average Latency ⚡
+
       setModelStats(prev => {
         const stats = prev[currentMod] || { total: 0, count: 0, avg: 0 };
         const newTotal = stats.total + parseFloat(fetchTime);
@@ -654,7 +655,7 @@ function ChatApp() {
           ...prev,
           [currentMod]: { total: newTotal, count: newCount, avg: parseFloat(newAvg) }
         };
-        // Persist to local storage
+
         localStorage.setItem("modelStats", JSON.stringify(updated));
         return updated;
       });
@@ -662,8 +663,8 @@ function ChatApp() {
       updateSessionMessages(sessionId, [...updatedMessages, botMessage]);
       setIsTyping(false);
 
-      // 🔊 Auto-Speak for Voice Chat 🔊
-      // If the user just used voice input, read the response back automatically
+
+
       if (document.activeElement?.className?.includes('mic-btn') || isListening) {
         handleSpeak(res.data.answer, updatedMessages.length);
       }
@@ -693,7 +694,7 @@ function ChatApp() {
       await axios.post(`${process.env.REACT_APP_API_URL || `${process.env.REACT_APP_API_URL || "http://localhost:5001"}`}/chat/${chatId}/satisfaction`, {
         satisfaction: satisfaction
       });
-      // Update local state to show it was clicked
+
       setSessions(prev => prev.map(s => {
         if (s.id === currentSessionId) {
           const updatedMessages = [...s.messages];
@@ -718,9 +719,9 @@ function ChatApp() {
     setIsAuthenticated(false);
     setUserEmail("");
     localStorage.removeItem("userEmail");
-    // We don't clear sessions here to allow persistent history if needed, 
-    // but the app state is reset. 
-    // otp_verified_{email} stays in localStorage.
+
+
+
     window.location.reload();
   };
 
@@ -736,7 +737,7 @@ function ChatApp() {
       const parts = l.split(footnoteRegex);
 
       content = parts.map((part, index) => {
-        if (index % 2 === 1) { // Footnote bracket part
+        if (index % 2 === 1) { 
           const num = parseInt(part);
           const source = sources[num - 1];
           if (source) {
@@ -755,7 +756,7 @@ function ChatApp() {
           return `[${part}]`;
         }
 
-        // Text part - handle highlighting
+
         if (chatSearchText.trim() && part.toLowerCase().includes(chatSearchText.toLowerCase())) {
           const subParts = part.split(new RegExp(`(${escapedSearch})`, 'gi'));
           return subParts.map((sub, sIdx) =>
@@ -792,12 +793,12 @@ function ChatApp() {
     }
   };
 
-  // If not authenticated, show email login
+
   if (!isAuthenticated) {
     return (
       <div className="app-container page-entrance">
         <div className="email-login-card">
-          {/* Left branding panel */}
+
           <div className="login-branding">
             <img
               src="/plogo.png"
@@ -808,7 +809,7 @@ function ChatApp() {
             <p>Your AI-powered assistant for instant, accurate policy insights at SRM University AP.</p>
           </div>
 
-          {/* Right form panel */}
+
           <div className="login-form-panel">
             <div className="login-header" style={{ width: '100%', maxWidth: '360px', marginTop: '40px' }}>
               <h2 style={{ fontSize: '22px', fontWeight: '600', marginBottom: '6px', color: '#0f172a' }}>Sign In</h2>
@@ -883,10 +884,10 @@ function ChatApp() {
 
 
 
-  // Main Chat Interface (Authenticated)
+
   return (
     <div className="app-container">
-      {/* SIDEBAR */}
+
       <aside className={`chat-sidebar ${isSidebarOpen ? 'open' : ''}`}>
         <div className="sidebar-header">
           <div className="sidebar-greeting">
@@ -946,7 +947,7 @@ function ChatApp() {
         </div>
       </aside>
 
-      {/* Toggle to open sidebar when closed */}
+
       {!isSidebarOpen && (
         <button className="sidebar-open-btn" onClick={() => setIsSidebarOpen(true)}>
           <span className="toggle-icon">▶</span>
@@ -956,7 +957,7 @@ function ChatApp() {
       <div className="chat-container">
         <div className="chat-main-area">
 
-          {/* Source Popup */}
+
           {popupSource && (
             <SourcePopup
               source={popupSource}
@@ -968,7 +969,7 @@ function ChatApp() {
             />
           )}
 
-          {/* PDF Popup */}
+
           {showPdfPopup && (
             <PolicyPdfPopup
               policy={selectedPolicy}
@@ -978,7 +979,7 @@ function ChatApp() {
             />
           )}
 
-          {/* Policy Diff Comparison Modal */}
+
           {showDiffCompare && (
             <PolicyDiffCompare
               policies={policies}
@@ -987,7 +988,7 @@ function ChatApp() {
             />
           )}
 
-          {/* HEADER */}
+
           <header className="chat-header">
             <div className="header-content">
               <div className="title-group">
@@ -1071,7 +1072,7 @@ function ChatApp() {
             </div>
           </header>
 
-          {/* Policy popup */}
+
           {showPolicies && (
             <div className="policy-popup">
               <div className="policy-popup-header">
@@ -1098,7 +1099,7 @@ function ChatApp() {
             </div>
           )}
 
-          {/* MAIN */}
+
           <div className="main-content">
             <div className="conversation-window" ref={chatWindowRef}>
 
@@ -1155,7 +1156,7 @@ function ChatApp() {
                             onUpdate={scrollToBottom}
                             formatFn={(txt) => formatText(txt, [], chatSearch)}
                             onComplete={() => {
-                              // Mark message as not new after typing finishes so sources show up
+
                               const updated = [...conversation];
                               if (updated[i]) updated[i].isNew = false;
                               updateSessionMessages(currentSessionId, updated);
@@ -1279,13 +1280,13 @@ function ChatApp() {
               )}
             </div>
 
-            {/* INPUT */}
+
             <div className="input-section">
               {error && <div className="error-message">{error}</div>}
 
-              {/* Models and Scroll To Bottom Button */}
+
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                {/* Model Selector Pills */}
+
                 <div className="model-selector" style={{ marginBottom: 0 }}>
                   <button
                     className={`model-pill ${selectedModel === "qwen3.5:2b" ? "active" : ""}`}
@@ -1316,7 +1317,7 @@ function ChatApp() {
                   </button>
                 </div>
 
-                {/* Scroll To Bottom Button */}
+
                 <button
                   type="button"
                   onClick={(e) => { e.preventDefault(); scrollToBottom(); }}
@@ -1380,7 +1381,7 @@ function ChatApp() {
             </div>
           </div>
 
-          {/* FOOTER */}
+
           <footer className="app-footer">
             <div style={{ display: 'flex', gap: '24px', justifyContent: 'center', marginBottom: '10px' }}>
               <a href="https://srmap.edu.in" target="_blank" rel="noreferrer" style={{ color: '#64748b', textDecoration: 'none', fontWeight: 500, fontSize: '12.5px', transition: 'color 0.2s' }}>SRM AP Home</a>
@@ -1397,7 +1398,7 @@ function ChatApp() {
             </div>
           </footer>
 
-          {/* FEEDBACK WIDGET */}
+
           {showFeedback && isAuthenticated && (
             <div className="feedback-widget" style={{
               position: 'fixed', bottom: '20px', left: '20px', background: 'var(--glass-bg)',
@@ -1459,7 +1460,7 @@ function ChatApp() {
         </div>
       </div>
 
-      {/* Logout Goodbye Modal */}
+
       {showLogoutBye && (
         <div className="logout-bye-overlay">
           <div className="logout-bye-modal">

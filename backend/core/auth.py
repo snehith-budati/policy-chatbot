@@ -13,7 +13,6 @@ def is_otp_enabled():
     except NameError:
         return False
 
-# Configuration & Constants
 ADMIN_USERNAME = os.environ.get('ADMIN_USERNAME', 'capstoneb2')
 ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD', '1234')
 ALLOWED_DOMAIN = "srmap.edu.in"
@@ -35,7 +34,6 @@ ADMIN_EMAIL_MAPPINGS = {
 def authenticate_admin(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        # Bypass admin OTP authentication if disabled
         if not is_otp_enabled():
             return f(*args, **kwargs)
 

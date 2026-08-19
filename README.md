@@ -1,6 +1,6 @@
 <div align="center">
 
-  # 🛡️ PolicyHub AI
+  # PolicyHub AI
   ### **Voice-Enabled Enterprise RAG & Local LLM Policy Intelligence Platform**
 
   [![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=flat-square&logo=python&logoColor=white)](https://python.org)
@@ -30,7 +30,7 @@ Enterprise policy manuals, HR guidelines, and compliance PDFs are notoriously de
 
 ---
 
-## ⚡ Core Architecture & Pipeline
+## Core Architecture & Pipeline
 
 ```
 [ PDF / Policy Upload ] ──► [ Multi-Engine OCR ] ──► [ Dynamic Chunking (300/50) ]
@@ -55,25 +55,25 @@ Enterprise policy manuals, HR guidelines, and compliance PDFs are notoriously de
 
 ---
 
-## ✨ Key Features
+## Key Features
 
-### 🔍 1. High-Precision Retrieval-Augmented Generation (RAG)
+###  1. High-Precision Retrieval-Augmented Generation (RAG)
 - **Dynamic Semantic Chunking**: Documents are split into 300-token semantic chunks with 50-token overlap to maintain context across section boundaries.
 - **Cross-Encoder Re-Ranking**: Retrieved chunks pass through a secondary cross-encoder scoring stage to ensure only high-confidence ($>0.38$) context reaches the prompt.
 - **Source Citation & Traceability**: Responses explicitly cite section numbers, document titles, and paragraph references.
 
-### 🎙️ 2. Voice-Enabled Interaction & OCR Ingestion
+###  2. Voice-Enabled Interaction & OCR Ingestion
 - **Voice In / Audio Out**: Integrated speech-to-text input and natural text-to-speech synthesis for hands-free querying.
 - **Multi-Engine Document Pipeline**: Fallback OCR support via `pdf2image`, `Tesseract`, `EasyOCR`, and Apple Silicon `MLX` pipelines for scanned PDFs and tables.
 
-### 🔐 3. Security, Authentication & Governance
+###  3. Security, Authentication & Governance
 - **OTP Verification**: Secure email/phone OTP login workflow for employees.
 - **Rate Limiting & Protection**: Built-in `Flask-Limiter` middleware preventing endpoint exhaustion.
 - **Admin Audit Trail**: Every upload, document deletion, and system prompt modification is logged with timestamps and admin IDs.
 
 ---
 
-## 🛠️ Tech Stack
+##  Tech Stack
 
 | Layer | Technology | Details |
 | :--- | :--- | :--- |
@@ -87,7 +87,7 @@ Enterprise policy manuals, HR guidelines, and compliance PDFs are notoriously de
 
 ---
 
-## 🚀 Quick Start & Local Setup
+##  Quick Start & Local Setup
 
 ### Prerequisites
 - **Python 3.10+**
@@ -120,7 +120,7 @@ npm start
 
 ---
 
-## 🐳 Running with Docker
+##  Running with Docker
 
 You can spin up the full stack using Docker:
 
@@ -132,7 +132,7 @@ docker run -p 5000:5000 policyhub-ai-backend
 
 ---
 
-## 📁 Repository Structure
+##  Repository Structure
 
 ```
 policy-chatbot/
@@ -152,7 +152,7 @@ policy-chatbot/
 
 ---
 
-## 👤 Author
+##  Author
 
 **Snehith Budati**
 - **GitHub**: [@snehith-budati](https://github.com/snehith-budati)

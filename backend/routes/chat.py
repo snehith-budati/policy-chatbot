@@ -133,19 +133,9 @@ def chat():
             })
 
         else:
-            # Step 1: Semantic Cache Check
+            # [Prefix/Prompt-Caching Branch]: Bypass pre-retrieval Semantic Cache lookup to isolate Prompt Prefix Caching
             question_embedding_bytes = create_embedding(question)
-            cached_answer, cached_sources = check_semantic_cache(question_embedding_bytes)
-            
-            if cached_answer:
-                chat_id = save_chat_record(user_email, question, cached_answer, cached_sources)
-                return jsonify({
-                    "answer": cached_answer,
-                    "sources": json.loads(cached_sources),
-                    "session_id": session_id,
-                    "chat_id": chat_id,
-                    "cached": True
-                })
+            cached_answer, cached_sources = None, None
 
             # Step 2: Full RAG Pipeline
             min_relevance_score = 0.22
@@ -301,11 +291,13 @@ def chat():
                         "model": model,
                         "prompt": prompt,
                         "stream": False,
+                        "keep_alive": "1h",
                         "options": {
                             "temperature": 0.1,
                             "top_p": 0.9,
                             "num_predict": 512,
-                            "num_ctx": 4096
+                            "num_ctx": 4096,
+                            "low_vram": False
                         }
                     },
                     timeout=60
@@ -314,7 +306,17 @@ def chat():
                 if response.status_code != 200:
                     answer = f"Ollama model error: {response.text}"
                 else:
-                    raw_ans = response.json().get("response", "").strip()
+                    resp_data = response.json()
+                    raw_ans = resp_data.get("response", "").strip()
+                    prompt_eval_dur = resp_data.get("prompt_eval_duration", 0)
+                    eval_dur = resp_data.get("eval_duration", 0)
+                    prompt_tokens = resp_data.get("prompt_eval_count", 0)
+                    eval_tokens = resp_data.get("eval_count", 0)
+                    ttft_ms = round(prompt_eval_dur / 1_000_000.0, 2)
+                    gen_ms = round(eval_dur / 1_000_000.0, 2)
+                    is_prefix_cached = ttft_ms < 60.0 and prompt_tokens > 200
+                    print(f"⚡ [Prefix/Prompt Cache Log]: Prefix TTFT = {ttft_ms}ms | Reused Prefix Tokens = {prompt_tokens} | Prefix Cache Reuse: {is_prefix_cached}")
+                    
                     if not raw_ans:
                         answer = "I'm sorry, I found the relevant documents but I'm unable to summarize the answer right now. Please check the 'Evidence' panel below for the specific policy details."
                     else:
@@ -348,13 +350,7 @@ def chat():
             duration, confidence, model_label
         )
         
-        if "answer" in locals() and "sources" in locals() and \
-           "I apologize" not in answer and "I can only answer questions" not in answer:
-            try:
-                sources_json = json.dumps(sources)
-                add_to_semantic_cache(question, question_embedding_bytes, answer, sources_json)
-            except Exception as e:
-                print(f"⚠️ Failed to cache: {e}")
+        # [Prefix/Prompt-Caching Branch]: Bypass storing to semantic vector cache to keep architecture 100% Prefix-Cache driven
         
         return jsonify({
             "answer": answer,
